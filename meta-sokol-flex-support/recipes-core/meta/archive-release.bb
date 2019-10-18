@@ -439,7 +439,7 @@ def checksummed_downloads(dl_by_layer_fn, dl_by_layer_dl_dir, dl_dir):
         dl_path = os.path.join(dl_dir, rel_path)
         if not os.path.exists(dl_path):
             # download is missing, probably excluded for license reasons
-            bb.warn('Download %s does not exist, excluding' % dl_path)
+            bb.warn('Download %s does not exist, excluding' % os.path.basename(dl_path))
             continue
 
         checksum = chksum_dl(dl_path)
