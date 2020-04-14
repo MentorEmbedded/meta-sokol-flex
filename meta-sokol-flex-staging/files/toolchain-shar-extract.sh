@@ -255,21 +255,6 @@ fi
 echo "done"
 
 printf "Setting it up..."
-# fix environment paths
-real_env_setup_script=""
-for env_setup_script in `ls $target_sdk_dir/environment-setup-*`; do
-	if grep -q 'OECORE_NATIVE_SYSROOT=' $env_setup_script; then
-		# Handle custom env setup scripts that are only named
-		# environment-setup-* so that they have relocation
-		# applied - what we want beyond here is the main one
-		# rather than the one that simply sorts last
-		real_env_setup_script="$env_setup_script"
-	fi
-	$SUDO_EXEC sed -e "s:@SDKPATH@:$target_sdk_dir:g" -i $env_setup_script
-done
-if [ -n "$real_env_setup_script" ] ; then
-	env_setup_script="$real_env_setup_script"
-fi
 
 @SDK_POST_INSTALL_COMMAND@
 
@@ -277,14 +262,6 @@ fi
 # if he/she wants another location for the sdk
 if [ $savescripts = 0 ] ; then
 	$SUDO_EXEC rm -f ${env_setup_script%/*}/relocate_sdk.py ${env_setup_script%/*}/relocate_sdk.sh
-fi
-
-# Execute post-relocation script
-post_relocate="$target_sdk_dir/post-relocate-setup.sh"
-if [ -e "$post_relocate" ]; then
-	$SUDO_EXEC sed -e "s:@SDKPATH@:$target_sdk_dir:g" -i $post_relocate
-	$SUDO_EXEC /bin/sh $post_relocate "$target_sdk_dir" "@SDKPATH@"
-	$SUDO_EXEC rm -f $post_relocate
 fi
 
 echo "SDK has been successfully set up and is ready to be used."
