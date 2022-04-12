@@ -2,8 +2,21 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-if [ -z "$ZSH_NAME" ] && [ "x$0" = "x./setup-flex" ]; then
-    echo >&2 "Error: This script needs to be sourced. Please run as '. $0'"
+flex_sourced=0
+if [ -n "$ZSH_EVAL_CONTEXT" ]; then
+    case $ZSH_EVAL_CONTEXT in *:file) flex_sourced=1 ;; esac
+elif [ -n "$BASH_VERSION" ]; then
+    (return 0 2>/dev/null) && flex_sourced=1 
+else
+    echo >&2 "Error: This shell is unsupported. Please use bash or zsh"
+    flex_sourced=2
+fi
+
+if [ "$flex_sourced" -eq 0 ]; then
+    echo >&2 "Error: This script needs to be sourced. Please run as '. \"$0\"'"
+    false
+elif [ "$flex_sourced" -eq 2 ]; then
+    false
 else
     if [ -n "$BASH_SOURCE" ]; then
         flexdir="`dirname "$BASH_SOURCE"`"
