@@ -20,9 +20,9 @@ CODEBENCH_SDK_VARS += "\
     DISTRO \
     DISTRO_NAME \
     DISTRO_VERSION \
-    ADE_IDENTIFIER \
-    ADE_SITENAME \
-    ADE_VERSION \
+    SDK_IDENTIFIER \
+    SDK_TITLE \
+    SDK_VERSION \
     gdb_serverpath=${bindir}/gdbserver \
 "
 CODEBENCH_SDK_VARS:append:tcmode-external-sourcery = "\
