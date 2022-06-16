@@ -132,7 +132,7 @@ configure_builddir () {
         extralayernames="$extralayernames $layer"
     done
 
-    $layerdir/scripts/bb-determine-layers -g "$layerpaths" -l "$CORELAYERS $extralayernames" -o "$EXTRAFLEXLAYERS $OPTIONALLAYERS" -O "$layer_priority_overrides" -m "$MACHINE" -d "$DISTRO" "$@" >$layersfile
+    $layerdir/scripts/bb-determine-layers -g "$layerpaths" -l "$CORELAYERS $extralayernames" -o "$EXTRAFLEXLAYERS $OPTIONALLAYERS" -O "$layer_priority_overrides" -m "$MACHINE" -d "$DISTRO" -c "$BUILDDIR/conf/bblayers.conf" "$@" >$layersfile
     if [ $? -ne 0 ]; then
         echo >&2 "Error in execution of bb-determine-layers, aborting"
         return 1
