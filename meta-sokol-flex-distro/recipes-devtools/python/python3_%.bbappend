@@ -16,7 +16,7 @@ python do_archive_release_downloads:append:mel:class-target () {
     from pathlib import Path
 
     sources_dir = Path(sources_dir)
-    layerdir = d.getVar('LAYERDIR_mel')
+    layerdir = d.getVar('LAYERDIR_sokol-flex-distro')
     script = Path(layerdir).parent / 'scripts' / 'patchinfo'
     if not script.exists():
         bb.fatal('Expected {} script does not exist'.format(str(script)))

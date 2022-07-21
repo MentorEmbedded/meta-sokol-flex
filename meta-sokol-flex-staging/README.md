@@ -1,19 +1,14 @@
-Mentor Embedded Linux Flex OS Distribution Layer for Yocto/OE
-=====================================================
+Siemens Digital Industries Software Staging Layer for Yocto/OE
+==========================================
 
-This layer holds the Mentor Embedded Linux Flex OS distro configuration and
-associated policy.
+This layer holds the bits we need for Mentor Embedded Linux Flex OS, but which we
+intend to get merged upstream. This is our staging area. Nothing should be in
+this layer permanently, other than layer.conf and associated bits.
 
 This layer depends on:
 
 URI: git://git.openembedded.org/openembedded-core
 Branch: master
-
-URI: git://git.yoctoproject.org/meta-yocto
-Revision: master
-
-We recommend including meta-mel-support and meta-mentor-staging as well, but
-these shouldn't be required.
 
 
 Contributing
@@ -28,6 +23,6 @@ mailing list.
 Mailing list: meta-mentor@yoctoproject.org
 
 When sending single patches, please use something like
-'git send-email -1 --subject-prefix 'PATCH][meta-mel' --to meta-mentor@yoctoproject.org'
+'git send-email -1 --subject-prefix 'PATCH][meta-sokol-flex-staging' --to meta-mentor@yoctoproject.org'
 
 When sending a series, please use oe-core/scripts/create-pull-request.
