@@ -9,7 +9,7 @@ This layer depends on:
 URI: git://git.openembedded.org/openembedded-core
 Branch: master
 
-It's most useful alongside meta-mel.
+It's most useful alongside meta-sokol-flex-distro.
 
 
 Contributing
@@ -24,6 +24,6 @@ mailing list.
 Mailing list: meta-mentor@yoctoproject.org
 
 When sending single patches, please use something like
-'git send-email -1 --subject-prefix 'PATCH][meta-mel-support' --to meta-mentor@yoctoproject.org'
+'git send-email -1 --subject-prefix 'PATCH][meta-sokol-flex-support' --to meta-mentor@yoctoproject.org'
 
 When sending a series, please use oe-core/scripts/create-pull-request.
