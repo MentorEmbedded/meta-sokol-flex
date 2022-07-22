@@ -35,7 +35,7 @@ unspecified, and the script will set you up for that build directory without
 changing its configuration.
 
 All layers whose directory name is update-* or meta-mentor-cve, at toplevel or
-a subdir, of the parent of meta-mentor, will be automatically included, as
+a subdir, of the parent of meta-sokol-flex, will be automatically included, as
 a mechanism for delivering sets of updates for releases.
 
 Options:

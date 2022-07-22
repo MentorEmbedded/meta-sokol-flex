@@ -12,7 +12,7 @@ usage: ${0##*/} [options] BUILD_DIR [MANIFEST_FILE [EXTRA_MANIFEST_FILES..]]
 
 Create the BUILD_DIR, populate it with bitbake, layers, etc, from this Sokol Flex OS
 installation, and configure it via the usual setup-environment script from
-meta-mentor.
+meta-sokol-flex.
 
 If no manifest file is specified, and -n is not specified, a prompt will be
 shown to interactively select one of the manifests in the same flex
