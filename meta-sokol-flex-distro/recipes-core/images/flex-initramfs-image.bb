@@ -9,7 +9,7 @@ PACKAGE_INSTALL = "initramfs-framework-base ${VIRTUAL-RUNTIME_base-utils} initra
 # Do not pollute the initrd image with rootfs features
 IMAGE_FEATURES = ""
 
-export IMAGE_BASENAME = "${MLPREFIX}mel-initramfs-image"
+export IMAGE_BASENAME = "${MLPREFIX}flex-initramfs-image"
 IMAGE_NAME_SUFFIX ?= ""
 IMAGE_LINGUAS = ""
 

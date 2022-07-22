@@ -10,4 +10,4 @@ IMAGE_FEATURES_DEVELOPMENT ?= "debug-tweaks tools-profile"
 IMAGE_FEATURES_DISABLED_DEVELOPMENT ?= ""
 IMAGE_FEATURES:remove = "${IMAGE_FEATURES_DISABLED_DEVELOPMENT}"
 
-require recipes-core/images/mel-image.inc
+require recipes-core/images/flex-image.inc

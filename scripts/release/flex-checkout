@@ -15,7 +15,7 @@ installation, and configure it via the usual setup-environment script from
 meta-mentor.
 
 If no manifest file is specified, and -n is not specified, a prompt will be
-shown to interactively select one of the manifests in the same mel
+shown to interactively select one of the manifests in the same flex
 installation as this script. If no extra manifest files are specified, and
 neither -n nor -X are specified, a prompt will be shown for each type.
 

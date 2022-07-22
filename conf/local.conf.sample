@@ -50,7 +50,7 @@ MACHINE ??= "qemux86"
 # details.
 
 IMAGE_FEATURES_DEVELOPMENT ?= "debug-tweaks"
-IMAGE_FEATURES_DEVELOPMENT:append:feature-mel-bsp = " codebench-debug ssh-server-openssh tools-profile"
+IMAGE_FEATURES_DEVELOPMENT:append:feature-flex-bsp = " codebench-debug ssh-server-openssh tools-profile"
 EXTRA_IMAGE_FEATURES = "${IMAGE_FEATURES_DEVELOPMENT} multilib-runtime"
 
 # Image features for production-image
@@ -115,11 +115,11 @@ BINUTILS_EXCEPTION = "${@'binutils:GPL-3.0-only' if d.getVar('PN') == 'binutils'
 #SOURCE_MIRROR_URL = "http://myserver/sources"
 
 # Our download directory / cache for the workspace
-DL_DIR ?= "${MELDIR}/downloads"
+DL_DIR ?= "${FLEXDIR}/downloads"
 
 # Continue to pull downloads from the build dir if available
 PREMIRRORS:prepend = "\
-    .*://.*/.* file://${MELDIR}/${MACHINE}/downloads/ \n \
+    .*://.*/.* file://${FLEXDIR}/${MACHINE}/downloads/ \n \
     .*://.*/.* file://${TOPDIR}/downloads/ \n \
 "
 
@@ -130,8 +130,8 @@ SSTATE_DIR ?= "${TOPDIR}/cached-binaries"
 
 # Continue to pull cached binaries from the Sokol Flex OS install
 SSTATE_MIRROR_SITES += "\
-    file://${MELDIR}/${MACHINE}/cached-binaries \
-    file://${MELDIR}/cached-binaries \
+    file://${FLEXDIR}/${MACHINE}/cached-binaries \
+    file://${FLEXDIR}/cached-binaries \
 "
 
 # Where to place the build output and temporary artifacts

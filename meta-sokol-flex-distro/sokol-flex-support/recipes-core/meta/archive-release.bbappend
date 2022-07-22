@@ -3,9 +3,9 @@
 # ---------------------------------------------------------------------------------------------------------------------
 
 FILESEXTRAPATHS:append = ":${@':'.join('%s/../scripts/release:%s/../scripts' % (l, l) for l in '${BBPATH}'.split(':'))}"
-MEL_SCRIPTS_FILES = "mel-checkout version-sort setup-mel setup-workspace setup-ubuntu setup-rh setup-debian"
-SRC_URI += "${@' '.join(uninative_urls(d)) if 'mel_downloads' in '${RELEASE_ARTIFACTS}'.split() else ''}"
-SRC_URI += "${@' '.join('file://%s' % s for s in d.getVar('MEL_SCRIPTS_FILES').split())}"
+FLEX_SCRIPTS_FILES = "flex-checkout version-sort setup-flex setup-workspace setup-ubuntu setup-rh setup-debian"
+SRC_URI += "${@' '.join(uninative_urls(d)) if 'flex_downloads' in '${RELEASE_ARTIFACTS}'.split() else ''}"
+SRC_URI += "${@' '.join('file://%s' % s for s in d.getVar('FLEX_SCRIPTS_FILES').split())}"
 
 inherit layerdirs
 
@@ -25,14 +25,14 @@ FORKED_REPOS ?= ""
 PUBLIC_REPOS ?= "${FORKED_REPOS}"
 
 # Define a location for placing external artifacts to be used by the build
-MEL_EXTERNAL_ARTIFACTS ?= "${TOPDIR}/mel-external-artifacts"
+FLEX_EXTERNAL_ARTIFACTS ?= "${TOPDIR}/flex-external-artifacts"
 
 RELEASE_EXCLUDED_LAYERNAMES ?= "workspacelayer"
 
 ARCHIVE_RELEASE_DL_DIR ?= "${DL_DIR}"
 ARCHIVE_RELEASE_DL_BY_LAYER_PATH = '${TMPDIR}/downloads-by-layer.txt'
 
-def mel_get_remotes(subdir, d):
+def flex_get_remotes(subdir, d):
     """Any non-public github repo or url including a mentor domain
     are considered private, so no remote is included.
     """
@@ -70,7 +70,7 @@ def mel_get_remotes(subdir, d):
     remotes['origin'] = url
     return remotes
 
-GET_REMOTES_HOOK:sokol-flex ?= "mel_get_remotes"
+GET_REMOTES_HOOK:sokol-flex ?= "flex_get_remotes"
 
 GIT_ROOT_TOO_FAR_PATHS = "${OEDIR} ${TOPDIR} ${HOME}"
 
@@ -115,7 +115,7 @@ def get_release_info(layerdir, layername, topdir, oedir, too_far_paths, indiv_on
     else:
         return layerdir, os.path.basename(layerdir), indiv_layer
 
-python do_archive_mel_layers () {
+python do_archive_flex_layers () {
     """Archive the layers used to build, as git pack files, with a manifest."""
     import collections
     import configparser
@@ -176,7 +176,7 @@ python do_archive_mel_layers () {
     for parent, keep_files in git_indivs.items():
         to_archive.add((parent, os.path.basename(parent), tuple(keep_files)))
 
-    outdir = d.expand('${S}/do_archive_mel_layers')
+    outdir = d.expand('${S}/do_archive_flex_layers')
     mandir = os.path.join(outdir, 'manifests')
     bb.utils.mkdirhier(mandir)
     bb.utils.mkdirhier(os.path.join(mandir, 'extra'))
@@ -254,15 +254,15 @@ python do_archive_mel_layers () {
                 files.append(os.path.relpath(infofn, outdir))
         bb.process.run(['tar', '-cf', os.path.basename(fn) + '.tar'] + files, cwd=outdir)
 
-    scripts = d.getVar('MEL_SCRIPTS_FILES').split()
-    bb.process.run(['tar', '--transform=s,^,scripts/,', '--transform=s,^scripts/setup-mel,setup-mel,', '-cvf', d.expand('%s/${SCRIPTS_ARTIFACT_NAME}.tar' % outdir)] + scripts, cwd=d.getVar('WORKDIR'))
+    scripts = d.getVar('FLEX_SCRIPTS_FILES').split()
+    bb.process.run(['tar', '--transform=s,^,scripts/,', '--transform=s,^scripts/setup-flex,setup-flex,', '-cvf', d.expand('%s/${SCRIPTS_ARTIFACT_NAME}.tar' % outdir)] + scripts, cwd=d.getVar('WORKDIR'))
 }
-do_archive_mel_layers[dirs] = "${S}/do_archive_mel_layers ${S}"
-do_archive_mel_layers[vardeps] += "${GET_REMOTES_HOOK}"
+do_archive_flex_layers[dirs] = "${S}/do_archive_flex_layers ${S}"
+do_archive_flex_layers[vardeps] += "${GET_REMOTES_HOOK}"
 # We make use of the distro version, so want to avoid changing checksum issues
 # for snapshot builds.
-do_archive_mel_layers[vardepsexclude] += "DATE TIME"
-addtask archive_mel_layers after do_patch
+do_archive_flex_layers[vardepsexclude] += "DATE TIME"
+addtask archive_flex_layers after do_patch
 
 def git_archive(subdir, outdir, parent, message=None, keep_paths=None, source_date_epoch=None, is_public=False):
     """Create an archive for the specified subdir, holding a single git object
@@ -388,7 +388,7 @@ def chksum_dl(path, dlpath=None):
 
     return checksum
 
-python do_archive_mel_downloads () {
+python do_archive_flex_downloads () {
     import collections
     import pickle
     import oe.path
@@ -397,11 +397,11 @@ python do_archive_mel_downloads () {
     archive_dl_dir = d.getVar('ARCHIVE_RELEASE_DL_DIR') or dl_dir
     dl_by_layer_fn = d.getVar('ARCHIVE_RELEASE_DL_BY_LAYER_PATH')
     if not os.path.exists(dl_by_layer_fn):
-        bb.fatal('%s does not exist, but mel_downloads requires it. Please run `bitbake-layers dump-downloads` with appropriate arguments.' % dl_by_layer_fn)
+        bb.fatal('%s does not exist, but flex_downloads requires it. Please run `bitbake-layers dump-downloads` with appropriate arguments.' % dl_by_layer_fn)
 
     downloads = list(checksummed_downloads(dl_by_layer_fn, dl_dir, archive_dl_dir))
     downloads.extend(sorted(uninative_downloads(d.getVar('WORKDIR'), d.getVar('DL_DIR'))))
-    outdir = d.expand('${S}/do_archive_mel_downloads')
+    outdir = d.expand('${S}/do_archive_flex_downloads')
     mandir = os.path.join(outdir, 'manifests')
     dldir = os.path.join(outdir, 'downloads')
     bb.utils.mkdirhier(mandir)
@@ -449,7 +449,7 @@ python do_archive_mel_downloads () {
             bb.process.run(['tar', '-chf', '%s/download-%s.tar' % (dldir, checksum), os.path.relpath(dest, outdir)], cwd=outdir)
             os.unlink(dest)
 }
-do_archive_mel_downloads[depends] += "${@'${RELEASE_IMAGE}:${FETCHALL_TASK}' if '${RELEASE_IMAGE}' else ''}"
+do_archive_flex_downloads[depends] += "${@'${RELEASE_IMAGE}:${FETCHALL_TASK}' if '${RELEASE_IMAGE}' else ''}"
 
 archive_uninative_downloads () {
     # Ensure that uninative downloads are in ARCHIVE_RELEASE_DL_DIR, since
@@ -460,4 +460,4 @@ archive_uninative_downloads () {
     done
 }
 archive_uninative_downloads[dirs] = "${WORKDIR}"
-do_archive_mel_downloads[prefuncs] += "archive_uninative_downloads"
+do_archive_flex_downloads[prefuncs] += "archive_uninative_downloads"
