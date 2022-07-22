@@ -10,7 +10,7 @@
 # version 2.  This program  is licensed "as is" without any warranty of any
 # kind, whether express or implied.
 
-DISTRO="${DISTRO:-mel}"
+DISTRO="${DISTRO:-sokol-flex}"
 CORELAYERS="${CORELAYERS:-}"
 OPTIONALLAYERS="${OPTIONALLAYERS-}"
 EXTRAMELLAYERS="${EXTRAMELLAYERS-}"

@@ -2,4 +2,4 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-DISTRO_FEATURES:remove:mel = "opengl"
+DISTRO_FEATURES:remove:sokol-flex = "opengl"
