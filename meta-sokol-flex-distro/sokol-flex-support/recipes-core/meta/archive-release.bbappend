@@ -70,7 +70,7 @@ def mel_get_remotes(subdir, d):
     remotes['origin'] = url
     return remotes
 
-GET_REMOTES_HOOK:mel ?= "mel_get_remotes"
+GET_REMOTES_HOOK:sokol-flex ?= "mel_get_remotes"
 
 GIT_ROOT_TOO_FAR_PATHS = "${OEDIR} ${TOPDIR} ${HOME}"
 

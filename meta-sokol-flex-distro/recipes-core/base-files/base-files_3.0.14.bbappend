@@ -4,7 +4,7 @@
 
 FILESEXTRAPATHS:prepend := "${THISDIR}:"
 
-dirs755:append:mel = "\
+dirs755:append:sokol-flex = "\
     ${sysconfdir}/alternatives \
     ${localstatedir}/lib/alternatives \
 "

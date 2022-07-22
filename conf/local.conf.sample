@@ -1,5 +1,5 @@
 # Distro is set to Mentor Embedded Linux Flex OS distro.
-DISTRO = 'mel'
+DISTRO = 'sokol-flex'
 
 # You need to select a specific machine to target the build with. There are a selection
 # of emulated machines available which can boot and run in the QEMU emulator:
@@ -11,7 +11,7 @@ MACHINE ??= "qemux86"
 #EXTERNAL_TOOLCHAIN ?= "/path/to/toolchain"
 
 # Uncomment to use the oe/yocto-built toolchain rather than the external
-#TCMODE:mel = "default"
+#TCMODE:sokol-flex = "default"
 
 # The CORE_IMAGE_EXTRA_INSTALL variable allows extra individual packages to be
 # added to any of the images inheriting core-image.bbclass, including the

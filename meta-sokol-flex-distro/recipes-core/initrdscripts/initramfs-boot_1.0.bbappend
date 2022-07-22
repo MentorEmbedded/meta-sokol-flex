@@ -2,4 +2,4 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-FILESEXTRAPATHS:prepend:mel := "${THISDIR}/files:"
+FILESEXTRAPATHS:prepend:sokol-flex := "${THISDIR}/files:"

@@ -25,4 +25,4 @@ def get_generic_tune(d):
         tune = d.getVar('DEFAULTTUNE')
     return tune
 
-DEFAULTTUNE:mel := "${@get_generic_tune(d)}"
+DEFAULTTUNE:sokol-flex := "${@get_generic_tune(d)}"

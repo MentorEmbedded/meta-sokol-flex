@@ -2,4 +2,4 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-EXTRA_OECONF:append:class-native:mel = " --disable-schedutils"
+EXTRA_OECONF:append:class-native:sokol-flex = " --disable-schedutils"
