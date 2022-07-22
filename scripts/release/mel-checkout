@@ -10,7 +10,7 @@ usage () {
     cat >&2 <<END
 usage: ${0##*/} [options] BUILD_DIR [MANIFEST_FILE [EXTRA_MANIFEST_FILES..]]
 
-Create the BUILD_DIR, populate it with bitbake, layers, etc, from this MEL
+Create the BUILD_DIR, populate it with bitbake, layers, etc, from this Sokol Flex OS
 installation, and configure it via the usual setup-environment script from
 meta-mentor.
 

@@ -21,7 +21,7 @@ usage () {
     cat >&2 <<END
 Usage: $0 [OPTIONS...] [MACHINE]
 
-When operating from a MEL install, this script will use the template config
+When operating from a Sokol Flex OS install, this script will use the template config
 files from the installed BSP. If multiple BSPs are installed, you must specify
 MACHINE, and the script will use the templates from that BSP.
 
@@ -41,10 +41,10 @@ a mechanism for delivering sets of updates for releases.
 Options:
 
   -b BUILDDIR  Specify the build directory to create (default: 'build')
-  -o MELDIR    Specify the root of the MEL install, where you can find bitbake
+  -o MELDIR    Specify the root of the Sokol Flex OS install, where you can find bitbake
                and the layers
   -p PATHS     Specify colon separated list of paths, where you can find layers
-               in addition to the root of the MEL install (default: empty).
+               in addition to the root of the Sokol Flex OS install (default: empty).
                If any path in this list contains wildcards, the list must be quoted
                to avoid wildcard substitution by the shell
   -l LAYERS    Space-separated list of layer names for additional layers you
@@ -266,12 +266,12 @@ setup_builddir () {
                     fi
                     echo "$machine"
                 done | prompt_choice $non_interactive "Select BSP to use" >$tmpdir/machine || {
-                    echo >&2 "Error: unable to prompt for an installed MEL BSP, please specify MACHINE"
+                    echo >&2 "Error: unable to prompt for an installed Sokol Flex OS BSP, please specify MACHINE"
                     return 1
                 }
             MACHINE="$(cat "$tmpdir/machine")"
             if [ -z "$MACHINE" ]; then
-                echo >&2 "Error: unable to locate installed MEL BSP, please specify MACHINE"
+                echo >&2 "Error: unable to locate installed Sokol Flex OS BSP, please specify MACHINE"
                 return 1
             else
                 TEMPLATECONF=$MELDIR/$MACHINE/conf
