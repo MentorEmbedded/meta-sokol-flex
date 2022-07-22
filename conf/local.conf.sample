@@ -1,4 +1,4 @@
-# Distro is set to Mentor Embedded Linux Flex OS distro.
+# Distro is set to Sokol Flex OS distro.
 DISTRO = 'sokol-flex'
 
 # You need to select a specific machine to target the build with. There are a selection

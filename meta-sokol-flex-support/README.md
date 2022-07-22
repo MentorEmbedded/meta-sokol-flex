@@ -1,7 +1,7 @@
-Mentor Embedded Linux Flex OS Support Layer for Yocto/OE
+Sokol Flex OS Support Layer for Yocto/OE
 ================================================
 
-This layer holds the bits useful for Mentor Embedded Linux Flex OS, but which aren't
+This layer holds the bits useful for Sokol Flex OS, but which aren't
 appropriate for inclusion in the distro layer.
 
 This layer depends on:

@@ -1,7 +1,7 @@
-Mentor Embedded Linux Flex OS Distribution Layer for Yocto/OE
+Sokol Flex OS Distribution Layer for Yocto/OE
 =====================================================
 
-This layer holds the Mentor Embedded Linux Flex OS distro configuration and
+This layer holds the Sokol Flex OS distro configuration and
 associated policy.
 
 This layer depends on:
