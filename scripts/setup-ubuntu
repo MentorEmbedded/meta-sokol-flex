@@ -32,7 +32,7 @@ PKGS="$PKGS bmap-tools"
 # This is needed for Windows ADE
 PKGS="$PKGS zip"
 
-echo "Installing packages required to build Mentor Embedded Linux Flex OS"
+echo "Installing packages required to build Sokol Flex OS"
 $SUDO apt-get update
 $SUDO apt-get -y install $PKGS
 
