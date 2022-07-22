@@ -128,7 +128,7 @@ PREMIRRORS:prepend = "\
 # cache objects and this variable determines where those files are placed.
 SSTATE_DIR ?= "${TOPDIR}/cached-binaries"
 
-# Continue to pull cached binaries from the MEL install
+# Continue to pull cached binaries from the Sokol Flex OS install
 SSTATE_MIRROR_SITES += "\
     file://${MELDIR}/${MACHINE}/cached-binaries \
     file://${MELDIR}/cached-binaries \

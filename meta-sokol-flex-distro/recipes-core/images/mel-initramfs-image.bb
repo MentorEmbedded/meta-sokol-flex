@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-DESCRIPTION = "MEL Image initramfs"
+DESCRIPTION = "Sokol Flex OS Image initramfs"
 
 PACKAGE_INSTALL = "initramfs-framework-base ${VIRTUAL-RUNTIME_base-utils} initramfs-module-udev udev base-passwd ${ROOTFS_BOOTSTRAP_INSTALL}"
 

@@ -29,7 +29,7 @@ else
     unset mel_arg
     "$meldir/scripts/setup-workspace" "$@" && \
     cd "$WORKSPACEDIR" && \
-    echo >&2 "MEL setup complete in $WORKSPACEDIR" && \
+    echo >&2 "Sokol Flex OS setup complete in $WORKSPACEDIR" && \
     echo >&2 "You can now source "$WORKSPACEDIR"/meta-mentor/setup-environment for setting up a build."
 fi
 # vim: set ft=sh :
