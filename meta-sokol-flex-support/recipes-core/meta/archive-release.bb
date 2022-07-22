@@ -19,7 +19,7 @@ SRC_URI:append:qemuall = " file://runqemu.in"
 inherit image_types nopackages
 
 UNINATIVE_BUILD_ARCHES ?= "x86_64 i686"
-MELDIR ?= "${COREBASE}/.."
+FLEXDIR ?= "${COREBASE}/.."
 TEMPLATECONF_STR ?= "${@(oe.utils.read_file('${TOPDIR}/conf/templateconf.cfg') or '${FILE_DIRNAME}/../../../conf').rstrip()}"
 TEMPLATECONF = "${@os.path.join('${COREBASE}', '${TEMPLATECONF_STR}')}"
 
@@ -110,8 +110,8 @@ IMAGE_EXTENSIONS_WIC = "${@' '.join(e for e in d.getVar('IMAGE_EXTENSIONS_FULL')
 IMAGE_EXTENSIONS ?= "${@d.getVar('IMAGE_EXTENSIONS_WIC') if d.getVar('IMAGE_EXTENSIONS_WIC') else d.getVar('IMAGE_EXTENSIONS_FULL')}"
 
 python () {
-    # Make sure MELDIR is absolute, as we use it in transforms
-    d.setVar('MELDIR', os.path.abspath(d.getVar('MELDIR')))
+    # Make sure FLEXDIR is absolute, as we use it in transforms
+    d.setVar('FLEXDIR', os.path.abspath(d.getVar('FLEXDIR')))
 
     for component in d.getVar('RELEASE_ARTIFACTS').split():
         ctask = 'do_archive_%s' % component
@@ -159,7 +159,7 @@ git_tar () {
         fi
         git --git-dir=$path/.git archive --format=tar --prefix="${rel:-.}/" HEAD | bzip2 >${name}_${version}.tar.bz2
     else
-        if repo_root "$path" | grep -q '^${MELDIR}/'; then
+        if repo_root "$path" | grep -q '^${FLEXDIR}/'; then
             if [ "${@oe.data.typed_value('RELEASE_USE_TAGS', d)}" = "True" ]; then
                 version=$(cd "$path" && git describe --tags)
             else
@@ -184,17 +184,17 @@ repo_root () {
         return
     fi
 
-    rel=${1#${MELDIR}/}
+    rel=${1#${FLEXDIR}/}
     case "$rel" in
         /*)
             echo "$1"
             ;;
         *)
-            echo "${MELDIR}/${rel%%/*}"
+            echo "${FLEXDIR}/${rel%%/*}"
             ;;
     esac
 }
-repo_root[vardepsexclude] += "1#${MELDIR}/ rel%%/*"
+repo_root[vardepsexclude] += "1#${FLEXDIR}/ rel%%/*"
 
 bb_layers () {
     for layer in ${BBLAYERS}; do
@@ -244,7 +244,7 @@ prepare_templates () {
     sed -n '/^BBLAYERS/{n; :start; /\\$/{n; b start}; /^ *"$/d; :done}; p' ${TEMPLATECONF}/bblayers.conf.sample >bblayers.conf.sample
     echo 'BBLAYERS = "\' >>bblayers.conf.sample
     bb_layers | while read path relpath name; do
-        printf '    $%s%s \\\n' '{MELDIR}/' "$relpath" >>bblayers.conf.sample
+        printf '    $%s%s \\\n' '{FLEXDIR}/' "$relpath" >>bblayers.conf.sample
     done
     echo '"' >>bblayers.conf.sample
 }

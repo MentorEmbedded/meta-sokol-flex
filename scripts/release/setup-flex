@@ -2,22 +2,22 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-if [ -z "$ZSH_NAME" ] && [ "x$0" = "x./setup-mel" ]; then
+if [ -z "$ZSH_NAME" ] && [ "x$0" = "x./setup-flex" ]; then
     echo >&2 "Error: This script needs to be sourced. Please run as '. $0'"
 else
     if [ -n "$BASH_SOURCE" ]; then
-        meldir="`dirname "$BASH_SOURCE"`"
+        flexdir="`dirname "$BASH_SOURCE"`"
     elif [ -n "$ZSH_NAME" ]; then
-        meldir="`dirname "$0"`"
+        flexdir="`dirname "$0"`"
     else
-        meldir="`pwd`"
+        flexdir="`pwd`"
     fi
-    meldir=`readlink -f "$meldir"`
+    flexdir=`readlink -f "$flexdir"`
 
     WORKSPACEDIR="$PWD/workspace"
     for i in $(seq $#); do
-        mel_arg="$(eval printf "%s" "\$$i")"
-        case "$mel_arg" in
+        flex_arg="$(eval printf "%s" "\$$i")"
+        case "$flex_arg" in
             -w)
                 WORKSPACEDIR="$(eval printf "%s" "\$$(expr $i + 1)")"
                 if [ -z "$WORKSPACEDIR" ]; then
@@ -26,8 +26,8 @@ else
                 ;;
         esac
     done
-    unset mel_arg
-    "$meldir/scripts/setup-workspace" "$@" && \
+    unset flex_arg
+    "$flexdir/scripts/setup-workspace" "$@" && \
     cd "$WORKSPACEDIR" && \
     echo >&2 "Sokol Flex OS setup complete in $WORKSPACEDIR" && \
     echo >&2 "You can now source "$WORKSPACEDIR"/meta-mentor/setup-environment for setting up a build."

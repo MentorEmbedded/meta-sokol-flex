@@ -13,7 +13,7 @@
 DISTRO="${DISTRO:-sokol-flex}"
 CORELAYERS="${CORELAYERS:-}"
 OPTIONALLAYERS="${OPTIONALLAYERS-}"
-EXTRAMELLAYERS="${EXTRAMELLAYERS-}"
+EXTRAFLEXLAYERS="${EXTRAFLEXLAYERS-${EXTRAMELLAYERS-}}"
 layer_priority_overrides="openembedded-layer=1"
 
 
@@ -41,7 +41,7 @@ a mechanism for delivering sets of updates for releases.
 Options:
 
   -b BUILDDIR  Specify the build directory to create (default: 'build')
-  -o MELDIR    Specify the root of the Sokol Flex OS install, where you can find bitbake
+  -o FLEXDIR    Specify the root of the Sokol Flex OS install, where you can find bitbake
                and the layers
   -p PATHS     Specify colon separated list of paths, where you can find layers
                in addition to the root of the Sokol Flex OS install (default: empty).
@@ -146,7 +146,7 @@ configure_builddir () {
         updatelayernames="$updatelayernames $layer"
     done
 
-    $layerdir/scripts/bb-determine-layers -g "$layerpaths" -l "$CORELAYERS $extralayernames" -o "$EXTRAMELLAYERS $OPTIONALLAYERS" -e "$updatelayernames" -O "$layer_priority_overrides" -m "$MACHINE" -d "$DISTRO" "$@" >$layersfile
+    $layerdir/scripts/bb-determine-layers -g "$layerpaths" -l "$CORELAYERS $extralayernames" -o "$EXTRAFLEXLAYERS $OPTIONALLAYERS" -e "$updatelayernames" -O "$layer_priority_overrides" -m "$MACHINE" -d "$DISTRO" "$@" >$layersfile
     if [ $? -ne 0 ]; then
         echo >&2 "Error in execution of bb-determine-layers, aborting"
         return 1
@@ -167,7 +167,7 @@ configure_builddir () {
 
 process_arguments () {
     BUILDDIR=
-    MELDIR=
+    FLEXDIR=
     OEROOT=
     extrasearchpaths=
     extralayers=
@@ -179,7 +179,7 @@ process_arguments () {
                 BUILDDIR="$(abspath $OPTARG)"
                 ;;
             o)
-                MELDIR="$(abspath $OPTARG)"
+                FLEXDIR="$(abspath $OPTARG)"
                 ;;
             p)
                 extrasearchpaths="$OPTARG"
@@ -209,21 +209,21 @@ process_arguments () {
         fi
     fi
 
-    if [ -z "$MELDIR" ]; then
-        MELDIR=$(dirname $layerdir)
+    if [ -z "$FLEXDIR" ]; then
+        FLEXDIR=$(dirname $layerdir)
     fi
 
     updatelayers=
-    for lconf in $MELDIR/update-*/conf/layer.conf \
-                 $MELDIR/*/update-*/conf/layer.conf \
-                 $MELDIR/meta-mentor-cve/conf/layer.conf; do
+    for lconf in $FLEXDIR/update-*/conf/layer.conf \
+                 $FLEXDIR/*/update-*/conf/layer.conf \
+                 $FLEXDIR/meta-mentor-cve/conf/layer.conf; do
         updatelayer="${lconf%/conf/layer.conf}"
         if [ -e "$updatelayer" ]; then
             updatelayers="$updatelayers $updatelayer"
         fi
     done
 
-    layerpaths="*:*/*:meta*/*/*:$MELDIR/*:$MELDIR/*/*:$MELDIR/meta*/*/*${extrasearchpaths:+:}$extrasearchpaths"
+    layerpaths="*:*/*:meta*/*/*:$FLEXDIR/*:$FLEXDIR/*/*:$FLEXDIR/meta*/*/*${extrasearchpaths:+:}$extrasearchpaths"
 }
 
 setup_builddir () {
@@ -231,7 +231,7 @@ setup_builddir () {
     shift $(expr $OPTIND - 1)
 
     OEROOT="$($layerdir/scripts/bb-determine-layers -g "$layerpaths" -l core 2>/dev/null)/.." || {
-        echo >&2 "Error: unable to locate core layer (oe-core) in $MELDIR, aborting"
+        echo >&2 "Error: unable to locate core layer (oe-core) in $FLEXDIR, aborting"
         return 3
     }
 
@@ -240,17 +240,17 @@ setup_builddir () {
     fi
 
     if [ -z "$MACHINE" ]; then
-        if [ -e "$MELDIR/.machine" ]; then
-            MACHINE="$(cat "$MELDIR/.machine")"
+        if [ -e "$FLEXDIR/.machine" ]; then
+            MACHINE="$(cat "$FLEXDIR/.machine")"
         elif [ -e "$BUILDDIR/conf/local.conf" ]; then
             MACHINE=$(sed -n 's/^MACHINE ?*= "\([^"]*\)"/\1/p' $BUILDDIR/conf/local.conf)
         fi
     fi
 
     if [ -n "$MACHINE" ]; then
-        if [ -e $MELDIR/$MACHINE/binary ]; then
+        if [ -e $FLEXDIR/$MACHINE/binary ]; then
             # User specified machine and we have the binary content for this BSP
-            TEMPLATECONF=$MELDIR/$MACHINE/conf
+            TEMPLATECONF=$FLEXDIR/$MACHINE/conf
         fi
     else
         if [ ! -e $BUILDDIR/conf/local.conf -o ! -e $BUILDDIR/conf/bblayers.conf ] || [ -z "$MACHINE" ]; then
@@ -259,9 +259,9 @@ setup_builddir () {
             else
                 non_interactive=
             fi
-            ls -1d $MELDIR/*/binary 2>/dev/null | sed "s,^$MELDIR/,,; s,/binary$,," | \
+            ls -1d $FLEXDIR/*/binary 2>/dev/null | sed "s,^$FLEXDIR/,,; s,/binary$,," | \
                 while read machine; do
-                    if [ ! -e "$MELDIR/$machine/conf/local.conf.sample" ]; then
+                    if [ ! -e "$FLEXDIR/$machine/conf/local.conf.sample" ]; then
                         continue
                     fi
                     echo "$machine"
@@ -274,7 +274,7 @@ setup_builddir () {
                 echo >&2 "Error: unable to locate installed Sokol Flex OS BSP, please specify MACHINE"
                 return 1
             else
-                TEMPLATECONF=$MELDIR/$MACHINE/conf
+                TEMPLATECONF=$FLEXDIR/$MACHINE/conf
             fi
         fi
     fi
@@ -324,12 +324,12 @@ setup_builddir () {
         echo "You had no local.conf file. This configuration file has therefore been"
         echo "created for you with some default values."
 
-        if [ -h "$MELDIR/toolchains" ]; then
-            toolchains_path="$MELDIR/toolchains"
-            sedexpr='${MELDIR}/toolchains'
+        if [ -h "$FLEXDIR/toolchains" ]; then
+            toolchains_path="$FLEXDIR/toolchains"
+            sedexpr='${FLEXDIR}/toolchains'
         else
-            toolchains_path="$MELDIR/../../toolchains"
-            sedexpr='${MELDIR}/../../toolchains'
+            toolchains_path="$FLEXDIR/../../toolchains"
+            sedexpr='${FLEXDIR}/../../toolchains'
         fi
         if [ -d "$toolchains_path" ]; then
             sed -i -e "s,^#\?EXTERNAL_TOOLCHAIN.*,TOOLCHAINS_PATH ?= \"$toolchains_path\"," "$BUILDDIR/conf/local.conf"
@@ -341,7 +341,7 @@ setup_builddir () {
     fi
 
     if [ ! -e $BUILDDIR/conf/bblayers.conf ]; then
-        echo "MELDIR = \"$MELDIR\"" >$BUILDDIR/conf/bblayers.conf
+        echo "FLEXDIR = \"$FLEXDIR\"" >$BUILDDIR/conf/bblayers.conf
         echo >>$BUILDDIR/conf/bblayers.conf
         cat $TEMPLATECONF/bblayers.conf.sample >>$BUILDDIR/conf/bblayers.conf
         echo "You had no bblayers.conf file. This configuration file has therefore been"
@@ -352,8 +352,8 @@ setup_builddir () {
         fi
     fi
 
-    if [ -d "$MELDIR/bitbake" ]; then
-        BITBAKEDIR="$MELDIR/bitbake"
+    if [ -d "$FLEXDIR/bitbake" ]; then
+        BITBAKEDIR="$FLEXDIR/bitbake"
     else
         BITBAKEDIR="$OEROOT/bitbake"
     fi

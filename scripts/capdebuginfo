@@ -17,8 +17,8 @@
 # kind, whether express or implied.
 
 # Variables
-unset BUILDERR   # Path and filename of the MEL build error log file
-unset MELDIR     # Root path of the Sokol Flex OS installation directory
+unset BUILDERR   # Path and filename of the flex build error log file
+unset FLEXDIR     # Root path of the Sokol Flex OS installation directory
 
 HOMEDIR=${HOME}
 HOSTINFOFILE="hostinfo.txt"    # File containing info captured from user's host
@@ -171,7 +171,7 @@ get_hostprereqsinfo () {
 # Collect Sokol Flex OS installation info from host 
 #    Input: $1=Output directory name 
 #           $2=Filename for host info collection
-get_melinstallinfo () {
+get_flexinstallinfo () {
    local __outputdir="${1}"
    local __output="${1}/host/${2}"
    
@@ -187,7 +187,7 @@ get_melinstallinfo () {
 #    Input: $1=Output directory name 
 #           $2=BUILDERR
 #           $3=BUILDDIR
-get_melbuildinfo () {
+get_flexbuildinfo () {
    local __outputdir="${1}"
    local __builderr="${2}"
    local __builddir="${3}"
@@ -196,12 +196,12 @@ get_melbuildinfo () {
    local __pkgname="$(echo "${__builderr#/*/work/}" | cut -d"/" -f2)"
    local __pkgdir="${__builddir}"/tmp/work/"${__arch}"/"${__pkgname}"
 
-   cp -a "${__builddir}"/buildhistory/images/ "${__outputdir}"/mel/.
-   cp -a "${__builddir}"/tmp/log/ "${__outputdir}"/mel/.
-   cp -a "${__builddir}"/conf/ "${__outputdir}"/mel/.
+   cp -a "${__builddir}"/buildhistory/images/ "${__outputdir}"/flex/.
+   cp -a "${__builddir}"/tmp/log/ "${__outputdir}"/flex/.
+   cp -a "${__builddir}"/conf/ "${__outputdir}"/flex/.
 
-   mkdir "${__outputdir}"/mel/"${__arch}"
-   cp -a "${__pkgdir}" "${__outputdir}"/mel/"${__arch}"/.
+   mkdir "${__outputdir}"/flex/"${__arch}"
+   cp -a "${__pkgdir}" "${__outputdir}"/flex/"${__arch}"/.
 }
 
 
@@ -248,7 +248,7 @@ else
 		 fi
 	done
 
-	MELDIR="${a%%/bitbake/bin}"
+	FLEXDIR="${a%%/bitbake/bin}"
 
 	# Clean up artifacts from previous run of the script
 	if [ -d "${OUTPUTDIRNAME}" ]; then
@@ -260,15 +260,15 @@ else
 	fi
 
 	# Create directories for saving script outputs
-	mkdir -p "${OUTPUTDIRNAME}"/host "${OUTPUTDIRNAME}"/mel
+	mkdir -p "${OUTPUTDIRNAME}"/host "${OUTPUTDIRNAME}"/flex
 
 	# Collect host information
 	get_hostinfo "${OUTPUTDIRNAME}" "${HOSTINFOFILE}"
 	get_hostlicenseinfo "${OUTPUTDIRNAME}" "${HOSTINFOFILE}" "${MGLS_LICENSE}"
 	get_hostlicenseinfo "${OUTPUTDIRNAME}" "${HOSTINFOFILE}" "${LM_LICENSE}"
 	get_hostprereqsinfo "${OUTPUTDIRNAME}" "${HOSTINFOFILE}"
-	get_melinstallinfo "${OUTPUTDIRNAME}" "${HOSTINFOFILE}"
-	get_melbuildinfo "${OUTPUTDIRNAME}" "${BUILDERR}" "${BUILDDIR}"
+	get_flexinstallinfo "${OUTPUTDIRNAME}" "${HOSTINFOFILE}"
+	get_flexbuildinfo "${OUTPUTDIRNAME}" "${BUILDERR}" "${BUILDDIR}"
 
 	# Create tarball with info collected in output directory
 	echo "Creating \"${OUTPUTDIRNAME}\".tar.bz2..."

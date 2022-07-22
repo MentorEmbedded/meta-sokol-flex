@@ -19,7 +19,7 @@ EXTRA_OECONF:append:sokol-flex = " --disable-progress-bar"
 # # Update to latest version of psplash
 # SRCREV:sokol-flex = "5b3c1cc28f5abdc2c33830150b48b278cc4f7bca"
 
-SPLASH_IMAGES:sokol-flex = "file://mel.png;outsuffix=default"
+SPLASH_IMAGES:sokol-flex = "file://flex.png;outsuffix=default"
 
 SYSTEMD_INHERIT = ""
 SYSTEMD_INHERIT:sokol-flex = "systemd"

@@ -4,9 +4,9 @@
 
 # If any of these layers are available, but not included in BBLAYERS, warn
 UPDATES_CHECK_LAYERS ?= "\
-    ${MELDIR}/updates/update-*/ \
-    ${MELDIR}/update-*/ \
-    ${MELDIR}/meta-mentor-cve \
+    ${FLEXDIR}/updates/update-*/ \
+    ${FLEXDIR}/update-*/ \
+    ${FLEXDIR}/meta-mentor-cve \
 "
 UPDATES_CHECK_LAYERS[type] = "list"
 

@@ -104,7 +104,7 @@ else
 fi
 
 scriptdir="$(dirname "$0")"
-"$scriptdir/mel-checkout" ${all_versions:+-a} ${extra_disabled:+-X} "$WORKSPACEDIR" "$manifest" $extra_manifests \
+"$scriptdir/flex-checkout" ${all_versions:+-a} ${extra_disabled:+-X} "$WORKSPACEDIR" "$manifest" $extra_manifests \
     && cd "$WORKSPACEDIR"
 if [ $? -ne 0 ]; then
     if [ $existing_workspace -eq 0 ]; then

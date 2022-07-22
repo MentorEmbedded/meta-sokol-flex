@@ -17,8 +17,8 @@ templayerdir = None
 
 def setUpModule():
     global templayerdir
-    templayerdir = tempfile.mkdtemp(prefix='recipetool-mel-qa')
-    create_temp_layer(templayerdir, 'selftest-recipetool-mel')
+    templayerdir = tempfile.mkdtemp(prefix='recipetool-flex-qa')
+    create_temp_layer(templayerdir, 'selftest-recipetool-flex')
     runCmd('bitbake-layers add-layer %s' % templayerdir)
 
 
@@ -27,9 +27,9 @@ def tearDownModule():
     runCmd('rm -rf %s' % templayerdir)
 
 
-class RecipetoolMelTests(recipetool.RecipetoolAppendsrcBase):
+class RecipetoolFlexTests(recipetool.RecipetoolAppendsrcBase):
     def setUpLocal(self):
-        super(RecipetoolMelTests, self).setUpLocal()
+        super(RecipetoolFlexTests, self).setUpLocal()
         self.templayerdir = templayerdir
 
     def _test_kernel_cmd(self, cmd, target, expected_file_info):

@@ -23,7 +23,7 @@ logger = logging.getLogger('bitbake-layers')
 
 
 def plugin_init(plugins):
-    return MELUtilsPlugin()
+    return FlexUtilsPlugin()
 
 
 def iter_except(func, exception, first=None):
@@ -51,7 +51,7 @@ def iter_except(func, exception, first=None):
           pass
 
 
-class MELUtilsPlugin(LayerPlugin):
+class FlexUtilsPlugin(LayerPlugin):
     def _get_depgraph(self, targets, task='do_build'):
         depgraph = None
 
