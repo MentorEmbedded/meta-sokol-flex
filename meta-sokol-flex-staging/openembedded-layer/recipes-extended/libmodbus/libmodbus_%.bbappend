@@ -3,7 +3,7 @@
 # ---------------------------------------------------------------------------------------------------------------------
 
 FILESEXTRAPATHS:prepend := "${THISDIR}/libmodbus:"
-SRC_URI:append:feature-mentor-staging = " \
+SRC_URI:append:feature-sokol-flex-staging = " \
     file://run-ptest \
     file://local-tcp-test \
 "

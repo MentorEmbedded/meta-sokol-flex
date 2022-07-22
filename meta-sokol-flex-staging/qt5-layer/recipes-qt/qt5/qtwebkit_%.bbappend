@@ -2,4 +2,4 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-DEPENDS:append:feature-mentor-staging = " flex-native"
+DEPENDS:append:feature-sokol-flex-staging = " flex-native"

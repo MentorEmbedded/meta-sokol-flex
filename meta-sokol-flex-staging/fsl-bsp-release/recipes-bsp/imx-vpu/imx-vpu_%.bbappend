@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-do_install:append:feature-mentor-staging () {
+do_install:append:feature-sokol-flex-staging () {
     if [ "${libdir}" != "/usr/lib" ]; then
         install -d "$(dirname "${D}${libdir}")"
         mv "${D}/usr/lib" "${D}${libdir}"

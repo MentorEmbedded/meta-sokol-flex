@@ -6,7 +6,7 @@
 UPDATES_CHECK_LAYERS ?= "\
     ${FLEXDIR}/updates/update-*/ \
     ${FLEXDIR}/update-*/ \
-    ${FLEXDIR}/meta-mentor-cve \
+    ${FLEXDIR}/meta-flex-cve \
 "
 UPDATES_CHECK_LAYERS[type] = "list"
 
