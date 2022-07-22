@@ -2,4 +2,4 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-RDEPENDS:${PN}:append:feature-mentor-staging = " perl-module-list-util perl-module-bignum"
+RDEPENDS:${PN}:append:feature-sokol-flex-staging = " perl-module-list-util perl-module-bignum"

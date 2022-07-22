@@ -34,7 +34,7 @@ If the build directory already exists and is configured, you can leave MACHINE
 unspecified, and the script will set you up for that build directory without
 changing its configuration.
 
-All layers whose directory name is update-* or meta-mentor-cve, at toplevel or
+All layers whose directory name is update-* or meta-flex-cve, at toplevel or
 a subdir, of the parent of meta-sokol-flex, will be automatically included, as
 a mechanism for delivering sets of updates for releases.
 
@@ -216,7 +216,7 @@ process_arguments () {
     updatelayers=
     for lconf in $FLEXDIR/update-*/conf/layer.conf \
                  $FLEXDIR/*/update-*/conf/layer.conf \
-                 $FLEXDIR/meta-mentor-cve/conf/layer.conf; do
+                 $FLEXDIR/meta-flex-cve/conf/layer.conf; do
         updatelayer="${lconf%/conf/layer.conf}"
         if [ -e "$updatelayer" ]; then
             updatelayers="$updatelayers $updatelayer"
@@ -279,11 +279,11 @@ setup_builddir () {
         fi
     fi
 
-    # Pick up qemu layers from meta-mentor-bsp as we do
+    # Pick up qemu layers from meta-flex-bsp as we do
     # not create separate machines for them
     case ${MACHINE} in
         qemu*)
-            OPTIONALLAYERS="$OPTIONALLAYERS mentor-bsp-$MACHINE"
+            OPTIONALLAYERS="$OPTIONALLAYERS flex-bsp-$MACHINE"
             ;;
     esac
 

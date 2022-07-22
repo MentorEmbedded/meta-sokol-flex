@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-FILESEXTRAPATHS:prepend:feature-mentor-staging := "${THISDIR}/${BPN}:"
+FILESEXTRAPATHS:prepend:feature-sokol-flex-staging := "${THISDIR}/${BPN}:"
 
-SRC_URI:append:feature-mentor-staging = " file://0001-PR3597-Potential-bogus-Wformat-overflow-warning-with.patch"
+SRC_URI:append:feature-sokol-flex-staging = " file://0001-PR3597-Potential-bogus-Wformat-overflow-warning-with.patch"
 

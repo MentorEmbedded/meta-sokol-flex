@@ -3,4 +3,4 @@
 # ---------------------------------------------------------------------------------------------------------------------
 
 FILESEXTRAPATHS:prepend := "${THISDIR}/qtbase:"
-SRC_URI:append:feature-mentor-staging = " file://Fix-note-alignment.patch"
+SRC_URI:append:feature-sokol-flex-staging = " file://Fix-note-alignment.patch"

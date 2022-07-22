@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-do_install:append:feature-mentor-staging () {
+do_install:append:feature-sokol-flex-staging () {
         chown -R root:root ${D}${datadir}/jamvm/classes.zip
 }
 
