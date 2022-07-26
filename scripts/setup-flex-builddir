@@ -34,10 +34,6 @@ If the build directory already exists and is configured, you can leave MACHINE
 unspecified, and the script will set you up for that build directory without
 changing its configuration.
 
-All layers whose directory name is update-*, at toplevel or a subdir, of the
-parent of meta-sokol-flex, will be automatically included, as a mechanism
-for delivering sets of updates for releases.
-
 Options:
 
   -b BUILDDIR  Specify the build directory to create (default: 'build')
@@ -136,16 +132,7 @@ configure_builddir () {
         extralayernames="$extralayernames $layer"
     done
 
-    updatelayernames=
-    for layer in $updatelayers; do
-        if [ -d "$layer" ]; then
-            layer="$(PATH="$OEROOT/scripts:$OEROOT/bitbake/bin:$PATH" $(dirname "$0")/bb-print-layer-data 2>/dev/null "$layer" | cut -d: -f1)"
-            layerpaths="$layerpaths:$layer"
-        fi
-        updatelayernames="$updatelayernames $layer"
-    done
-
-    $layerdir/scripts/bb-determine-layers -g "$layerpaths" -l "$CORELAYERS $extralayernames" -o "$EXTRAFLEXLAYERS $OPTIONALLAYERS" -e "$updatelayernames" -O "$layer_priority_overrides" -m "$MACHINE" -d "$DISTRO" "$@" >$layersfile
+    $layerdir/scripts/bb-determine-layers -g "$layerpaths" -l "$CORELAYERS $extralayernames" -o "$EXTRAFLEXLAYERS $OPTIONALLAYERS" -O "$layer_priority_overrides" -m "$MACHINE" -d "$DISTRO" "$@" >$layersfile
     if [ $? -ne 0 ]; then
         echo >&2 "Error in execution of bb-determine-layers, aborting"
         return 1
@@ -212,15 +199,6 @@ process_arguments () {
     if [ -z "$FLEXDIR" ]; then
         FLEXDIR=$(dirname $layerdir)
     fi
-
-    updatelayers=
-    for lconf in $FLEXDIR/update-*/conf/layer.conf \
-                 $FLEXDIR/*/update-*/conf/layer.conf \
-        updatelayer="${lconf%/conf/layer.conf}"
-        if [ -e "$updatelayer" ]; then
-            updatelayers="$updatelayers $updatelayer"
-        fi
-    done
 
     layerpaths="*:*/*:meta*/*/*:$FLEXDIR/*:$FLEXDIR/*/*:$FLEXDIR/meta*/*/*${extrasearchpaths:+:}$extrasearchpaths"
 }
