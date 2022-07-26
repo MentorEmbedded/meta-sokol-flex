@@ -237,7 +237,7 @@ class Layer(object):
 
         if not bbfile_collections:
             name = os.path.basename(layer_path)
-            l = Layer(layer_path, lconf, name, 0, 0, None, {})
+            l = Layer(layer_path, lconf, name, 0, 0, None, {}, {})
             layers.append(l)
 
         errors = []
