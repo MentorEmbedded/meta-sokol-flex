@@ -124,7 +124,6 @@ configure_builddir () {
     sed -i -e"s/^#*MACHINE *?*=.*/MACHINE ??= \"$MACHINE\"/" $BUILDDIR/conf/local.conf
     sed -n -i -e "s|##COREBASE##|$OEROOT|g" -e '/^BBLAYERS /{ :start; /\\$/{n; b start}; d; }; p' -e "/BBFILE_PRIORITY/d" $BUILDDIR/conf/bblayers.conf
 
-    echo 'BBLAYERS ?= "\' >> $BUILDDIR/conf/bblayers.conf
     layersfile="$tmpdir/layers"
 
     # Convert layer paths to layer names for bb-determine-layers
@@ -151,6 +150,7 @@ configure_builddir () {
         echo >&2 "Error in execution of bb-determine-layers, aborting"
         return 1
     fi
+    echo 'BBLAYERS ?= "\' >> $BUILDDIR/conf/bblayers.conf
     sed -e "s#^$BUILDDIR/#\${TOPDIR}/#g;" -e 's,^,    ,; s,$, \\,' <$layersfile >>$BUILDDIR/conf/bblayers.conf
     echo '"' >> $BUILDDIR/conf/bblayers.conf
     configured_layers="$(PATH="$OEROOT/scripts:$BITBAKEDIR/bin:$PATH" $(dirname "$0")/bb-print-layer-data $(cat $layersfile) 2>/dev/null | cut -d: -f1 | xargs)"
@@ -230,7 +230,7 @@ setup_builddir () {
     process_arguments "$@" || return $?
     shift $(expr $OPTIND - 1)
 
-    OEROOT="$($layerdir/scripts/bb-determine-layers -g "$layerpaths" -l core 2>/dev/null)/.." || {
+    OEROOT="$($layerdir/scripts/bb-determine-layers -g "$layerpaths" -l core -q)/.." || {
         echo >&2 "Error: unable to locate core layer (oe-core) in $MELDIR, aborting"
         return 3
     }
@@ -377,10 +377,11 @@ tmpdir="$(mktemp -d -t "${0##*/}.XXXXX")" || exit 1
 trap 'rm -rf "$tmpdir"' EXIT INT TERM
 
 setup_builddir "$@" || {
+    ret=$?
     if [ "$existing_builddir" = 0 ]; then
         rm -rf "$BUILDDIR"
     fi
-    exit $?
+    exit "$ret"
 }
 if [ -e $BUILDDIR/conf/local.conf ]; then
     sed -i -e "s/^DISTRO.*/DISTRO = \'$DISTRO\'/" $BUILDDIR/conf/local.conf
