@@ -159,7 +159,7 @@ configure_builddir () {
         while IFS== read -r layer priority; do
             case " $configured_layers " in
                 *\ $layer\ *)
-                    printf 'BBFILE_PRIORITY_%s_%s = "%d"\n' "$layer" "$DISTRO" "$priority" >> $BUILDDIR/conf/bblayers.conf
+                    printf 'BBFILE_PRIORITY_%s:%s = "%d"\n' "$layer" "$DISTRO" "$priority" >> $BUILDDIR/conf/bblayers.conf
                     ;;
             esac
         done
