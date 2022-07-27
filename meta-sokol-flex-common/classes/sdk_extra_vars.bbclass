@@ -1,3 +1,7 @@
+# ---------------------------------------------------------------------------------------------------------------------
+# SPDX-License-Identifier: MIT
+# ---------------------------------------------------------------------------------------------------------------------
+
 # In most cases, it's better to use environment-setup.d for this, but there
 # are cases where it's useful to add to the main env setup script.
 
