@@ -12,14 +12,6 @@
 #   FEATUREOVERRIDES .= "${@bb.utils.contains('DISTRO_FEATURES', 'some-feature', ':feature-some-feature', '', d)}"
 #   FEATUREOVERRIDES .= "${@bb.utils.contains('MACHINE_FEATURES', 'some-bsp-feature', ':feature-some-bsp-feature', '', d)}"
 
-python add_feature_overrides () {
-    feature_overrides = filter(None, d.getVar('FEATUREOVERRIDES').split(':'))
-    if feature_overrides:
-        d.prependVar('OVERRIDES', ':'.join(unique_everseen(feature_overrides)) + ':')
-}
-add_feature_overrides[eventmask] = "bb.event.ConfigParsed"
-addhandler add_feature_overrides
-
 def unique_everseen(iterable):
     "List unique elements, preserving order. Remember all elements ever seen."
     # unique_everseen('AAAABBBCCDAABBB') --> A B C D
@@ -30,3 +22,6 @@ def unique_everseen(iterable):
     for element in itertools.filterfalse(seen.__contains__, iterable):
         seen_add(element)
         yield element
+
+FEATURE_OVERRIDES_PREPEND = "${@':'.join(unique_everseen(filter(None, d.getVar('FEATUREOVERRIDES').split(':'))))}"
+OVERRIDES:prepend = "${@d.getVar('FEATURE_OVERRIDES_PREPEND') + ':' if d.getVar('FEATURE_OVERRIDES_PREPEND') else ''}"
