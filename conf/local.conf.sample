@@ -1,5 +1,5 @@
-# Distro is set to Mentor Embedded Linux Flex OS distro.
-DISTRO = 'mel'
+# Distro is set to Sokol Flex OS distro.
+DISTRO = 'sokol-flex'
 
 # You need to select a specific machine to target the build with. There are a selection
 # of emulated machines available which can boot and run in the QEMU emulator:
@@ -11,7 +11,7 @@ MACHINE ??= "qemux86"
 #EXTERNAL_TOOLCHAIN ?= "/path/to/toolchain"
 
 # Uncomment to use the oe/yocto-built toolchain rather than the external
-#TCMODE:mel = "default"
+#TCMODE:sokol-flex = "default"
 
 # The CORE_IMAGE_EXTRA_INSTALL variable allows extra individual packages to be
 # added to any of the images inheriting core-image.bbclass, including the
@@ -50,7 +50,7 @@ MACHINE ??= "qemux86"
 # details.
 
 IMAGE_FEATURES_DEVELOPMENT ?= "debug-tweaks"
-IMAGE_FEATURES_DEVELOPMENT:append:feature-mel-bsp = " codebench-debug ssh-server-openssh tools-profile"
+IMAGE_FEATURES_DEVELOPMENT:append:feature-flex-bsp = " codebench-debug ssh-server-openssh tools-profile"
 EXTRA_IMAGE_FEATURES = "${IMAGE_FEATURES_DEVELOPMENT} multilib-runtime"
 
 # Image features for production-image
@@ -115,11 +115,11 @@ BINUTILS_EXCEPTION = "${@'binutils:GPL-3.0-only' if d.getVar('PN') == 'binutils'
 #SOURCE_MIRROR_URL = "http://myserver/sources"
 
 # Our download directory / cache for the workspace
-DL_DIR ?= "${MELDIR}/downloads"
+DL_DIR ?= "${FLEXDIR}/downloads"
 
 # Continue to pull downloads from the build dir if available
 PREMIRRORS:prepend = "\
-    .*://.*/.* file://${MELDIR}/${MACHINE}/downloads/ \n \
+    .*://.*/.* file://${FLEXDIR}/${MACHINE}/downloads/ \n \
     .*://.*/.* file://${TOPDIR}/downloads/ \n \
 "
 
@@ -128,10 +128,10 @@ PREMIRRORS:prepend = "\
 # cache objects and this variable determines where those files are placed.
 SSTATE_DIR ?= "${TOPDIR}/cached-binaries"
 
-# Continue to pull cached binaries from the MEL install
+# Continue to pull cached binaries from the Sokol Flex OS install
 SSTATE_MIRROR_SITES += "\
-    file://${MELDIR}/${MACHINE}/cached-binaries \
-    file://${MELDIR}/cached-binaries \
+    file://${FLEXDIR}/${MACHINE}/cached-binaries \
+    file://${FLEXDIR}/cached-binaries \
 "
 
 # Where to place the build output and temporary artifacts
@@ -220,8 +220,7 @@ USER_CLASSES ?= "buildstats"
 # Uncomment to automatically spawn a terminal if a patch fails to apply
 #PATCHRESOLVE = "user"
 
-# Archive the source and put them to ${DEPLOY_DIR}/sources/. This is
-# particularly useful for license compliance.
+# Archive the source and put them to ${DEPLOY_DIR}/sources/.
 #
 #INHERIT += "archiver"
 #
@@ -250,13 +249,16 @@ USER_CLASSES ?= "buildstats"
 # 7) Whether output the .src.rpm package:
 #ARCHIVER_MODE[srpm] = "1"
 #
-
-# 8) Filter the license, the recipe whose license in COPYLEFT_LICENSE_INCLUDE
-# will be included, and in COPYLEFT_LICENSE_EXCLUDE will be excluded. These
-# variables affect both archiver and copyleft_compliance (similar to archiver,
-# but lighter and less flexible)
-COPYLEFT_LICENSE_INCLUDE = "GPL* LGPL*"
-COPYLEFT_LICENSE_EXCLUDE = "CLOSED Proprietary* Mentor Freescale EULA INTEL NetLogic"
+# 8) Filter the license, the recipe whose license in
+#    COPYLEFT_LICENSE_INCLUDE will be included, and in
+#    COPYLEFT_LICENSE_EXCLUDE will be excluded.
+#COPYLEFT_LICENSE_INCLUDE = 'GPL* LGPL*'
+#COPYLEFT_LICENSE_EXCLUDE = 'CLOSED Proprietary'
+#
+# 9) Config the recipe type that will be archived, the type can be
+#    target, native, nativesdk, cross, crosssdk and cross-canadian,
+#    you can set one or more types. Archive all types by default.
+#COPYLEFT_RECIPE_TYPES = 'target'
 
 # Alternative to the above archiver class. Doesn't support srpm, patched or
 # configured source, diff generation, metadata, etc. Only emits original

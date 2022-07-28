@@ -24,8 +24,8 @@ else
     fi
 
     for i in $(seq $#); do
-        setup_mel_arg="$(eval printf "%s" "\$$i")"
-        case "$setup_mel_arg" in
+        setup_flex_arg="$(eval printf "%s" "\$$i")"
+        case "$setup_flex_arg" in
             -b)
                 BUILDDIR="$(eval printf "%s" "\$$(expr $i + 1)")"
                 if [ -z "$BUILDDIR" ]; then
@@ -46,7 +46,7 @@ else
             fi
         done
 
-        OPTIONALLAYERS="${OPTIONALLAYERS-mentor-private tracing-layer}"
+        OPTIONALLAYERS="${OPTIONALLAYERS-flex-private tracing-layer}"
         # Customer directory layers handling (e.g. <customername>-custom)
         for layercheck in . $layerdir/..; do
             if [ -e "$layercheck/customer.conf" ]; then
@@ -80,12 +80,12 @@ else
             OPTIONALLAYERS="$OPTIONALLAYERS $EXTRALAYERS"
         fi
 
-        export OPTIONALLAYERS EXTRAMELLAYERS EXCLUDEDLAYERS
+        export OPTIONALLAYERS EXTRAFLEXLAYERS EXCLUDEDLAYERS
 
-        $layerdir/scripts/setup-mel-builddir "$@"
+        $layerdir/scripts/setup-flex-builddir "$@"
     )
-    mel_setup_ret=$?
-    if [ $mel_setup_ret -eq 0 ] && [ -n "$BUILDDIR" ] && [ -e "$BUILDDIR" ]; then
+    flex_setup_ret=$?
+    if [ $flex_setup_ret -eq 0 ] && [ -n "$BUILDDIR" ] && [ -e "$BUILDDIR" ]; then
         . $BUILDDIR/setup-environment
 
         configured_layers() {
@@ -131,6 +131,6 @@ else
         unset load_lconf_snippet
         unset configured_layers
     fi
-    unset layerdir setup_mel_arg
-    test $mel_setup_ret -eq 0
+    unset layerdir setup_flex_arg
+    test $flex_setup_ret -eq 0
 fi

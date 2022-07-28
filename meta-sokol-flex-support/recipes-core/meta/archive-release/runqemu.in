@@ -1,0 +1,24 @@
+#!/bin/sh
+
+# ---------------------------------------------------------------------------------------------------------------------
+# SPDX-License-Identifier: MIT
+# ---------------------------------------------------------------------------------------------------------------------
+
+scriptdir="$(cd "$(dirname "$0")" && pwd)"
+flexdir="$(cd "$scriptdir/../../.." && pwd)"
+
+if ! which bitbake >/dev/null 2>&1; then
+    if [ -e "$flexdir/manifests" ] && ! [ -e "$flexdir/meta-sokol-flex" ]; then
+        echo >&2 "Unable to run bitbake, please create a workspace by sourcing $flexdir/setup-flex and then source the setup script: . <workspacedir>/meta-sokol-flex/setup-environment"
+    else
+        echo >&2 "Unable to run bitbake, please source the setup script: . $flexdir/meta-sokol-flex/setup-environment"
+    fi
+    exit 1
+fi
+
+if ( eval $(bitbake -e | grep -E '^COMPONENTS_DIR='); ! [ -e "$COMPONENTS_DIR/x86_64/qemu-helper-native/usr/bin/tunctl" ] ); then
+    echo >&2 "Unable to find tunctl binary, building qemu-helper-native.."
+    bitbake qemu-helper-native:do_addto_recipe_sysroot
+fi
+
+exec "$flexdir/oe-core/scripts/runqemu" "$(basename "${scriptdir%/*/*}")" "$scriptdir/"*.qemuboot.conf "$@"
