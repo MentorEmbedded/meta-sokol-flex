@@ -6,9 +6,8 @@ DISTRO = 'sokol-flex'
 # qemuarm, qemumips, qemuppc, qemux86, qemux86-64.
 MACHINE ??= "qemux86"
 
-# The path to the installed sourcery toolchain. This defaults to using the one
-# from the CodeBench we're installed in.
-#EXTERNAL_TOOLCHAIN ?= "/path/to/toolchain"
+# The path to the toolchains installed with CodeBench.
+#TOOLCHAINS_PATH ?= "/path/to/toolchains"
 
 # Uncomment to use the oe/yocto-built toolchain rather than the external
 #TCMODE:sokol-flex = "default"
