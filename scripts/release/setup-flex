@@ -2,34 +2,48 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-if [ -z "$ZSH_NAME" ] && [ "x$0" = "x./setup-flex" ]; then
-    echo >&2 "Error: This script needs to be sourced. Please run as '. $0'"
+flex_sourced=0
+if [ -n "$ZSH_EVAL_CONTEXT" ]; then
+    case $ZSH_EVAL_CONTEXT in *:file) flex_sourced=1 ;; esac
+elif [ -n "$BASH_VERSION" ]; then
+    (return 0 2>/dev/null) && flex_sourced=1 
 else
+    echo >&2 "Error: This shell is unsupported. Please use bash or zsh"
+    flex_sourced=2
+fi
+
+if [ "$flex_sourced" -eq 0 ]; then
+    echo >&2 "Error: This script needs to be sourced. Please run as '. \"$0\"'"
+    false
+elif [ "$flex_sourced" -eq 2 ]; then
+    false
+else
+    # shellcheck disable=SC2128
     if [ -n "$BASH_SOURCE" ]; then
-        flexdir="`dirname "$BASH_SOURCE"`"
+        flexdir="$(dirname "$BASH_SOURCE")"
     elif [ -n "$ZSH_NAME" ]; then
-        flexdir="`dirname "$0"`"
+        flexdir="$(dirname "$0")"
     else
-        flexdir="`pwd`"
+        flexdir="$(pwd)"
     fi
-    flexdir=`readlink -f "$flexdir"`
+    flexdir=$(readlink -f "$flexdir")
 
     WORKSPACEDIR="$PWD/workspace"
     for i in $(seq $#); do
         flex_arg="$(eval printf "%s" "\$$i")"
         case "$flex_arg" in
-            -w)
-                WORKSPACEDIR="$(eval printf "%s" "\$$(expr $i + 1)")"
-                if [ -z "$WORKSPACEDIR" ]; then
-                    echo >&2 "-w requires an argument"
-                fi
-                ;;
+        -w)
+            WORKSPACEDIR="$(eval printf "%s" "\$$((i + 1))")"
+            if [ -z "$WORKSPACEDIR" ]; then
+                echo >&2 "-w requires an argument"
+            fi
+            ;;
         esac
     done
     unset flex_arg
     "$flexdir/scripts/setup-workspace" "$@" && \
     cd "$WORKSPACEDIR" && \
     echo >&2 "Sokol Flex OS setup complete in $WORKSPACEDIR" && \
-    echo >&2 "You can now source "$WORKSPACEDIR"/meta-sokol-flex/setup-environment for setting up a build."
+    echo >&2 "You can now source $WORKSPACEDIR/meta-sokol-flex/setup-environment for setting up a build."
 fi
 # vim: set ft=sh :
