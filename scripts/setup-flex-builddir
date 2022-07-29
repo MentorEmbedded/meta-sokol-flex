@@ -309,7 +309,7 @@ setup_builddir () {
             sedexpr='${FLEXDIR}/../../toolchains'
         fi
         if [ -d "$toolchains_path" ]; then
-            sed -i -e "s,^#\?EXTERNAL_TOOLCHAIN.*,TOOLCHAINS_PATH ?= \"$sedexpr\"," "$BUILDDIR/conf/local.conf"
+            sed -i -e "s,^#\?TOOLCHAINS_PATH.*,TOOLCHAINS_PATH ?= \"$sedexpr\"," "$BUILDDIR/conf/local.conf"
         fi
     else
         if [ -n "$MACHINE" ]; then
