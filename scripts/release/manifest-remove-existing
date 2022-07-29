@@ -10,7 +10,7 @@ usage () {
     echo >&2 "Remove all entries from all manifests in MANIFEST_DIR which"
     echo >&2 "were included in any manifests in EXISTING_MANIFEST_DIR"
     echo >&2
-    echo >&2 "This is specifically intended for use in creation of MEL product updates"
+    echo >&2 "This is specifically intended for use in creation of Sokol Flex OS product updates"
 }
 
 process_arguments () {
