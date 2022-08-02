@@ -300,17 +300,6 @@ setup_builddir () {
         cp $TEMPLATECONF/local.conf.sample $BUILDDIR/conf/local.conf
         echo "You had no local.conf file. This configuration file has therefore been"
         echo "created for you with some default values."
-
-        if [ -h "$FLEXDIR/toolchains" ]; then
-            toolchains_path="$FLEXDIR/toolchains"
-            sedexpr='${FLEXDIR}/toolchains'
-        else
-            toolchains_path="$FLEXDIR/../../toolchains"
-            sedexpr='${FLEXDIR}/../../toolchains'
-        fi
-        if [ -d "$toolchains_path" ]; then
-            sed -i -e "s,^#\?EXTERNAL_TOOLCHAIN.*,TOOLCHAINS_PATH ?= \"$toolchains_path\"," "$BUILDDIR/conf/local.conf"
-        fi
     else
         if [ -n "$MACHINE" ]; then
             echo "Configuring existing local.conf for $MACHINE"
