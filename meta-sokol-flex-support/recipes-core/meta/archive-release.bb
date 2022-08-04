@@ -18,7 +18,6 @@ SRC_URI:append:qemuall = " file://runqemu.in"
 # are needed for IMAGE_FSTYPES
 inherit image_types nopackages
 
-UNINATIVE_BUILD_ARCHES ?= "x86_64 i686"
 FLEXDIR ?= "${COREBASE}/.."
 TEMPLATECONF_STR ?= "${@(oe.utils.read_file('${TOPDIR}/conf/templateconf.cfg') or '${FILE_DIRNAME}/../../../conf').rstrip()}"
 TEMPLATECONF = "${@os.path.join('${COREBASE}', '${TEMPLATECONF_STR}')}"
@@ -131,8 +130,7 @@ python () {
 
 def uninative_urls(d):
     l = d.createCopy()
-    for arch in d.getVar('UNINATIVE_BUILD_ARCHES').split():
-        chksum = d.getVarFlag("UNINATIVE_CHECKSUM", arch)
+    for arch, chksum in d.getVarFlags("UNINATIVE_CHECKSUM").items():
         if chksum:
             l.setVar('BUILD_ARCH', arch)
             srcuri = l.expand("${UNINATIVE_URL}${UNINATIVE_TARBALL};sha256sum=%s;unpack=no;subdir=uninative/%s;downloadfilename=uninative/%s/${UNINATIVE_TARBALL}" % (chksum, chksum, chksum))
