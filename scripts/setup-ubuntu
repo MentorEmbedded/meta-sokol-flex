@@ -29,9 +29,6 @@ PKGS="$PKGS libgl1-mesa-dev libglu1-mesa-dev libsdl1.2-dev"
 # This is helpful to write images, and is in our documentation
 PKGS="$PKGS bmap-tools"
 
-# This is needed for Windows ADE
-PKGS="$PKGS zip"
-
 echo "Installing packages required to build Sokol Flex OS"
 $SUDO apt-get update
 $SUDO apt-get -y install $PKGS
