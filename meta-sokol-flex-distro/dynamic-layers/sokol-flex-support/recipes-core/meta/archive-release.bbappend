@@ -72,21 +72,17 @@ def flex_get_remotes(subdir, d):
 
 GET_REMOTES_HOOK:sokol-flex ?= "flex_get_remotes"
 
-GIT_ROOT_TOO_FAR_PATHS = "${OEDIR} ${TOPDIR} ${HOME}"
+# Don't allow git to chdir up past our workspace to avoid redistributing the wrong repository
+export GIT_CEILING_DIRECTORIES = "${WORKDIR}:${FLEXDIR}:${TOPDIR}:${HOME}"
 
-def layer_git_root(subdir, too_far_paths):
+def layer_git_root(subdir):
     try:
         git_root = bb.process.run(['git', 'rev-parse', '--show-toplevel'], cwd=subdir)[0].rstrip()
     except bb.process.CmdError:
         return None
-
-    too_far_under_root = any(too_far_path.startswith(git_root + os.sep) for too_far_path in too_far_paths)
-    if git_root in too_far_paths or too_far_under_root:
-        return None
-
     return git_root
 
-def get_release_info(layerdir, layername, topdir, oedir, too_far_paths, indiv_only=None, indiv_only_toplevel=None, indiv_manifests=None):
+def get_release_info(layerdir, layername, topdir, oedir, indiv_only=None, indiv_only_toplevel=None, indiv_manifests=None):
     import collections
     import fnmatch
 
@@ -99,7 +95,7 @@ def get_release_info(layerdir, layername, topdir, oedir, too_far_paths, indiv_on
 
     relpath = None
     if layerdir not in indiv_only:
-        git_root = layer_git_root(layerdir, too_far_paths)
+        git_root = layer_git_root(layerdir)
         if git_root:
             return git_root, os.path.basename(git_root), False
 
@@ -136,7 +132,6 @@ python do_archive_flex_layers () {
     indiv_only = d.getVar('SUBLAYERS_INDIVIDUAL_ONLY').split() + indiv_only_toplevel
     indiv_manifests = d.getVar('INDIVIDUAL_MANIFEST_LAYERS').split()
     excluded_layers = d.getVar('RELEASE_EXCLUDED_LAYERNAMES').split()
-    too_far_paths = d.getVar('GIT_ROOT_TOO_FAR_PATHS').split()
     get_remotes_hook = d.getVar('GET_REMOTES_HOOK')
     if get_remotes_hook:
         get_remotes = bb.utils.get_context().get(get_remotes_hook)
@@ -162,13 +157,13 @@ python do_archive_flex_layers () {
             continue
 
         parent = os.path.dirname(subdir)
-        git_root = layer_git_root(subdir, too_far_paths)
+        git_root = layer_git_root(subdir)
         if subdir in indiv_only and git_root:
             git_indivs[git_root].add(os.path.relpath(subdir, git_root))
             if layername and any(fnmatch.fnmatchcase(layername, pat) for pat in indiv_manifests):
                 indiv_manifest_dirs.add(subdir)
         else:
-            archive_path, dest_path, is_indiv = get_release_info(subdir, layername, topdir, oedir, too_far_paths, indiv_only=indiv_only, indiv_only_toplevel=indiv_only_toplevel, indiv_manifests=indiv_manifests)
+            archive_path, dest_path, is_indiv = get_release_info(subdir, layername, topdir, oedir, indiv_only=indiv_only, indiv_only_toplevel=indiv_only_toplevel, indiv_manifests=indiv_manifests)
             to_archive.add((archive_path, dest_path, None))
             if is_indiv:
                 indiv_manifest_dirs.add(subdir)
@@ -415,7 +410,6 @@ python do_archive_flex_downloads () {
     indiv_only_toplevel = d.getVar('SUBLAYERS_INDIVIDUAL_ONLY_TOPLEVEL').split()
     indiv_only = d.getVar('SUBLAYERS_INDIVIDUAL_ONLY').split() + indiv_only_toplevel
     indiv_manifests = d.getVar('INDIVIDUAL_MANIFEST_LAYERS').split()
-    too_far_paths = d.getVar('GIT_ROOT_TOO_FAR_PATHS').split()
 
     layers = set(i[0] for i in downloads)
     for layername in layers:
@@ -423,7 +417,7 @@ python do_archive_flex_downloads () {
             continue
 
         layerdir = d.getVar('LAYERDIR_%s' % layername)
-        archive_path, dest_path, is_indiv = get_release_info(layerdir, layername, topdir, oedir, too_far_paths, indiv_only=indiv_only, indiv_only_toplevel=indiv_only_toplevel, indiv_manifests=indiv_manifests)
+        archive_path, dest_path, is_indiv = get_release_info(layerdir, layername, topdir, oedir, indiv_only=indiv_only, indiv_only_toplevel=indiv_only_toplevel, indiv_manifests=indiv_manifests)
         if is_indiv:
             extra_name = dest_path.replace('/', '_')
             bb.utils.mkdirhier(os.path.join(mandir, 'extra', extra_name))
