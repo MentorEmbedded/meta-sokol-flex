@@ -14,8 +14,6 @@ SRC_URI[bmaptool.md5sum] = "7bc226c2b15aff58af31e421fa381d34"
 SRC_URI[bmaptool.sha256sum] = "8cedbb7a525dd4026b6cafe11f496de11dbda0f0e76a5b4938d2687df67bab7f"
 SRC_URI:append:qemuall = " file://runqemu.in"
 
-# We're using image fstypes data, inherit the class in case variables from it
-# are needed for IMAGE_FSTYPES
 inherit image_types image-artifact-names nopackages
 
 FLEXDIR ?= "${COREBASE}/.."
@@ -26,7 +24,7 @@ BSPFILES_INSTALL_PATH ?= "${MACHINE}"
 BINARY_INSTALL_PATH ?= "${BSPFILES_INSTALL_PATH}/binary"
 CONF_INSTALL_PATH ?= "${BSPFILES_INSTALL_PATH}/conf"
 
-# Add a default in case the user doesn't inherit copyleft_compliance
+# Default values if archive-release-downloads is not inherited
 ARCHIVE_RELEASE_DL_DIR ?= "${DL_DIR}"
 ARCHIVE_RELEASE_DL_TOPDIR ?= "${ARCHIVE_RELEASE_DL_DIR}"
 
