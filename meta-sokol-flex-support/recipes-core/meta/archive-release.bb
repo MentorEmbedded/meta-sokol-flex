@@ -40,14 +40,6 @@ def configured_update_layers(d):
             update_layers.add(layer)
     return ' '.join(sorted(update_layers))
 
-# Sub-layers to archive individually, rather than grabbing the entire
-# repository they're in
-def layers_by_name(d, *layers):
-    for l in layers:
-        v = d.getVar('LAYERDIR_%s' % l)
-        if v:
-            yield v
-
 SUBLAYERS_INDIVIDUAL_ONLY ?= ""
 SUBLAYERS_INDIVIDUAL_ONLY_TOPLEVEL ?= "${@configured_update_layers(d)}"
 
