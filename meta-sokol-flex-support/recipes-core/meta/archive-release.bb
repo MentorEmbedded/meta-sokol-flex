@@ -52,8 +52,8 @@ SUBLAYERS_INDIVIDUAL_ONLY ?= ""
 SUBLAYERS_INDIVIDUAL_ONLY_TOPLEVEL ?= "${@configured_update_layers(d)}"
 
 DEPLOY_DIR_RELEASE ?= "${DEPLOY_DIR}/release-artifacts"
-RELEASE_ARTIFACTS ?= "layers bitbake templates images downloads"
-RELEASE_ARTIFACTS[doc] = "List of artifacts to include (available: layers, bitbake, templates, images, downloads"
+RELEASE_ARTIFACTS ?= "layers bitbake images downloads"
+RELEASE_ARTIFACTS[doc] = "List of artifacts to include (available: layers, bitbake, images, downloads"
 RELEASE_IMAGE ?= "core-image-base"
 RELEASE_IMAGE[doc] = "The image to build and archive in this release"
 RELEASE_USE_TAGS ?= "false"
@@ -221,32 +221,6 @@ bb_layers () {
 bb_layers[vardeps] += "repo_root"
 bb_layers[vardepsexclude] += "layer%/ topdir##*/ layer#${topdir}/"
 
-prepare_templates () {
-    cp ${TEMPLATECONF}/conf-notes.txt .
-    sed 's,^MACHINE ??=.*,MACHINE ??= "${MACHINE}",' ${TEMPLATECONF}/local.conf.sample >local.conf.sample
-    if [ -n "${DISTRO}" ]; then
-        sed -i 's,^DISTRO =.*,DISTRO = "${DISTRO}",' local.conf.sample
-    fi
-
-    sourcery_version="$(echo ${SOURCERY_VERSION} | sed 's/-.*$//')"
-    if [ -n "$sourcery_version" ]; then
-        sed -i "s,^#*\(SOURCERY_VERSION_REQUIRED =\).*,\1 \"$sourcery_version\"," local.conf.sample
-    fi
-
-    pdk_version="${PDK_DISTRO_VERSION}"
-    if [ -n "$pdk_version" ]; then
-        echo >>local.conf.sample
-        echo "PDK_DISTRO_VERSION = \"$pdk_version\"" >>local.conf.sample
-    fi
-
-    sed -n '/^BBLAYERS/{n; :start; /\\$/{n; b start}; /^ *"$/d; :done}; p' ${TEMPLATECONF}/bblayers.conf.sample >bblayers.conf.sample
-    echo 'BBLAYERS = "\' >>bblayers.conf.sample
-    bb_layers | while read path relpath name; do
-        printf '    $%s%s \\\n' '{FLEXDIR}/' "$relpath" >>bblayers.conf.sample
-    done
-    echo '"' >>bblayers.conf.sample
-}
-
 do_archive_layers () {
     >${MACHINE}-layers.txt
     bb_layers | while read path relpath name; do
@@ -389,13 +363,35 @@ do_archive_images () {
         echo "--transform=s,runqemu,${BINARY_INSTALL_PATH}/runqemu," >>include
         echo runqemu >>include
     fi
-    if echo "${RELEASE_ARTIFACTS}" | grep -qw templates; then
-        prepare_templates
-        echo "--transform=s,$PWD/,${CONF_INSTALL_PATH}/," >>include
-        echo "$PWD/local.conf.sample" >>include
-        echo "$PWD/bblayers.conf.sample" >>include
-        echo "$PWD/conf-notes.txt" >>include
+
+    cp ${TEMPLATECONF}/conf-notes.txt .
+    sed 's,^MACHINE ??=.*,MACHINE ??= "${MACHINE}",' ${TEMPLATECONF}/local.conf.sample >local.conf.sample
+    if [ -n "${DISTRO}" ]; then
+        sed -i 's,^DISTRO =.*,DISTRO = "${DISTRO}",' local.conf.sample
     fi
+
+    sourcery_version="$(echo ${SOURCERY_VERSION} | sed 's/-.*$//')"
+    if [ -n "$sourcery_version" ]; then
+        sed -i "s,^#*\(SOURCERY_VERSION_REQUIRED =\).*,\1 \"$sourcery_version\"," local.conf.sample
+    fi
+
+    pdk_version="${PDK_DISTRO_VERSION}"
+    if [ -n "$pdk_version" ]; then
+        echo >>local.conf.sample
+        echo "PDK_DISTRO_VERSION = \"$pdk_version\"" >>local.conf.sample
+    fi
+
+    sed -n '/^BBLAYERS/{n; :start; /\\$/{n; b start}; /^ *"$/d; :done}; p' ${TEMPLATECONF}/bblayers.conf.sample >bblayers.conf.sample
+    echo 'BBLAYERS = "\' >>bblayers.conf.sample
+    bb_layers | while read path relpath name; do
+        printf '    $%s%s \\\n' '{FLEXDIR}/' "$relpath" >>bblayers.conf.sample
+    done
+    echo '"' >>bblayers.conf.sample
+
+    echo "--transform=s,$PWD/,${CONF_INSTALL_PATH}/," >>include
+    echo "$PWD/local.conf.sample" >>include
+    echo "$PWD/bblayers.conf.sample" >>include
+    echo "$PWD/conf-notes.txt" >>include
 
     if [ -e "${DEPLOY_DIR_IMAGE}/${RELEASE_IMAGE}-${MACHINE}.qemuboot.conf" ]; then
         cp "${DEPLOY_DIR_IMAGE}/${RELEASE_IMAGE}-${MACHINE}.qemuboot.conf" ${WORKDIR}/qemuboot.conf
@@ -419,12 +415,6 @@ do_archive_images () {
     echo "--transform=s,${WORKDIR}/bmaptool,${BINARY_INSTALL_PATH}/bmaptool," >>include
     echo "${WORKDIR}/bmaptool" >>include
     release_tar --files-from=include -chf ${MACHINE}-${ARCHIVE_RELEASE_VERSION}.tar
-}
-
-do_archive_templates () {
-    if ! echo "${RELEASE_ARTIFACTS}" | grep -qw images; then
-        prepare_templates
-    fi
 }
 
 do_prepare_release () {
