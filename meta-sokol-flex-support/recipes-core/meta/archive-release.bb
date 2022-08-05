@@ -16,7 +16,7 @@ SRC_URI:append:qemuall = " file://runqemu.in"
 
 # We're using image fstypes data, inherit the class in case variables from it
 # are needed for IMAGE_FSTYPES
-inherit image_types nopackages
+inherit image_types image-artifact-names nopackages
 
 FLEXDIR ?= "${COREBASE}/.."
 TEMPLATECONF_STR ?= "${@(oe.utils.read_file('${TOPDIR}/conf/templateconf.cfg') or '${FILE_DIRNAME}/../../../conf').rstrip()}"
@@ -51,8 +51,6 @@ LAYERS_OWN_DOWNLOADS ?= ""
 LAYERS_OWN_DOWNLOADS[doc] = "Names of layers whose downloads should be shipped inside the layer itself, self contained."
 
 IMAGE_BASENAME = "${RELEASE_IMAGE}"
-IMAGE_LINK_NAME ?= "${IMAGE_BASENAME}-${MACHINE}"
-IMAGE_NAME_SUFFIX ?= ".rootfs"
 EXTRA_IMAGES_ARCHIVE_RELEASE ?= ""
 DEPLOY_IMAGES ?= "\
     ${@' '.join('${IMAGE_LINK_NAME}.%s' % ext for ext in d.getVar('IMAGE_EXTENSIONS').split())} \
