@@ -8,46 +8,43 @@ INHIBIT_DEFAULT_DEPS = "1"
 PACKAGE_ARCH = "${MACHINE_ARCH}"
 EXCLUDE_FROM_WORLD = "1"
 
-SRC_URI += "${@' '.join(uninative_urls(d)) if 'downloads' in '${RELEASE_ARTIFACTS}'.split() else ''}"
-SRC_URI += "https://github.com/01org/bmap-tools/releases/download/v3.4/bmaptool;name=bmaptool"
-SRC_URI[bmaptool.md5sum] = "7bc226c2b15aff58af31e421fa381d34"
-SRC_URI[bmaptool.sha256sum] = "8cedbb7a525dd4026b6cafe11f496de11dbda0f0e76a5b4938d2687df67bab7f"
-SRC_URI:append:qemuall = " file://runqemu.in"
-
 inherit image_types image-artifact-names nopackages
-
-FLEXDIR ?= "${COREBASE}/.."
-TEMPLATECONF_STR ?= "${@(oe.utils.read_file('${TOPDIR}/conf/templateconf.cfg') or '${FILE_DIRNAME}/../../../conf').rstrip()}"
-TEMPLATECONF = "${@os.path.join('${COREBASE}', '${TEMPLATECONF_STR}')}"
-
-BSPFILES_INSTALL_PATH ?= "${MACHINE}"
-BINARY_INSTALL_PATH ?= "${BSPFILES_INSTALL_PATH}/binary"
-CONF_INSTALL_PATH ?= "${BSPFILES_INSTALL_PATH}/conf"
-
-# Default values if archive-release-downloads is not inherited
-ARCHIVE_RELEASE_DL_DIR ?= "${DL_DIR}"
-ARCHIVE_RELEASE_DL_TOPDIR ?= "${ARCHIVE_RELEASE_DL_DIR}"
-
-SUBLAYERS_INDIVIDUAL_ONLY ?= ""
-SUBLAYERS_INDIVIDUAL_ONLY_TOPLEVEL ?= ""
 
 DEPLOY_DIR_RELEASE ?= "${DEPLOY_DIR}/release-artifacts"
 RELEASE_ARTIFACTS ?= "layers bitbake images downloads"
 RELEASE_ARTIFACTS[doc] = "List of artifacts to include (available: layers, bitbake, images, downloads"
 RELEASE_IMAGE ?= "core-image-base"
 RELEASE_IMAGE[doc] = "The image to build and archive in this release"
-RELEASE_USE_TAGS ?= "false"
-RELEASE_USE_TAGS[doc] = "Use git tags rather than just # of commits for layer archive versioning"
-RELEASE_USE_TAGS[type] = "boolean"
-RELEASE_EXCLUDED_SOURCES ?= ""
-RELEASE_EXCLUDED_SOURCES[doc] = "Patterns of files in ARCHIVE_RELEASE_DL_DIR to exclude"
 BINARY_ARTIFACTS_COMPRESSION ?= ""
 BINARY_ARTIFACTS_COMPRESSION[doc] = "Compression type for images and downloads artifacts.\
  Available: '.bz2' and '.gz'. No compression if empty"
 
-LAYERS_OWN_DOWNLOADS ?= ""
-LAYERS_OWN_DOWNLOADS[doc] = "Names of layers whose downloads should be shipped inside the layer itself, self contained."
+# `layers` artifact configuration {{{1
+SUBLAYERS_INDIVIDUAL_ONLY ?= ""
+SUBLAYERS_INDIVIDUAL_ONLY_TOPLEVEL ?= ""
 
+RELEASE_USE_TAGS ?= "false"
+RELEASE_USE_TAGS[doc] = "Use git tags rather than just # of commits for layer archive versioning"
+RELEASE_USE_TAGS[type] = "boolean"
+# }}}1
+
+# `images` artifact configuration {{{1
+# Filesystem paths in the destination for the image artifacts
+BSPFILES_INSTALL_PATH ?= "${MACHINE}"
+BINARY_INSTALL_PATH ?= "${BSPFILES_INSTALL_PATH}/binary"
+CONF_INSTALL_PATH ?= "${BSPFILES_INSTALL_PATH}/conf"
+
+# Used to include conf-notes.txt, local.conf.sample, and bblayers.conf.sample for this BSP
+TEMPLATECONF_STR ?= "${@(oe.utils.read_file('${TOPDIR}/conf/templateconf.cfg') or '${FILE_DIRNAME}/../../../conf').rstrip()}"
+TEMPLATECONF = "${@os.path.join('${COREBASE}', '${TEMPLATECONF_STR}')}"
+
+# In our `images` artifact, nclude bmaptool and, for qemu, a runqemu wrapper
+SRC_URI += "https://github.com/01org/bmap-tools/releases/download/v3.4/bmaptool;name=bmaptool"
+SRC_URI[bmaptool.md5sum] = "7bc226c2b15aff58af31e421fa381d34"
+SRC_URI[bmaptool.sha256sum] = "8cedbb7a525dd4026b6cafe11f496de11dbda0f0e76a5b4938d2687df67bab7f"
+SRC_URI:append:qemuall = " file://runqemu.in"
+
+# Image files to be archived
 IMAGE_BASENAME = "${RELEASE_IMAGE}"
 EXTRA_IMAGES_ARCHIVE_RELEASE ?= ""
 DEPLOY_IMAGES ?= "\
@@ -59,32 +56,42 @@ DEPLOY_IMAGES ?= "\
 DEPLOY_IMAGES:append:qemuall = "${@' ' + d.getVar('KERNEL_IMAGETYPE') if 'wic' not in d.getVar('IMAGE_EXTENSIONS') else ''}"
 DEPLOY_IMAGES[doc] = "List of files from DEPLOY_DIR_IMAGE which will be archived"
 
-# Use IMAGE_EXTENSION_xxx to map image type 'xxx' with real image file
-# extension name(s)
-IMAGE_EXTENSION_live = "hddimg iso"
+# If a wic image is enabled, that's all we want
+IMAGE_EXTENSIONS_FULL = "${@' '.join(d.getVar('IMAGE_EXTENSION_%s' % t) or t for t in d.getVar('IMAGE_FSTYPES').split())}"
+IMAGE_EXTENSIONS_WIC = "${@' '.join(e for e in d.getVar('IMAGE_EXTENSIONS_FULL').split() if 'wic' in e)}"
+IMAGE_EXTENSIONS ?= "${@d.getVar('IMAGE_EXTENSIONS_WIC') if 'wic' in d.getVar('IMAGE_FSTYPES') else d.getVar('IMAGE_EXTENSIONS_FULL')}"
 
 # Exclude certain image types from the packaged build.
 # This allows us to build in the automated environment for regression,
 # general testing or simply for availability of extra image types for
 # internal use without necessarily packaging them in the installers.
-ARCHIVE_RELEASE_IMAGE_FSTYPES_EXCLUDE ?= "tar.gz tar.bz2 tar.xz"
+IMAGE_EXTENSIONS_EXCLUDED = "tar.gz tar.bz2 tar.xz"
+IMAGE_EXTENSIONS:remove = "${IMAGE_EXTENSIONS_EXCLUDED}"
+# }}}1
 
-def image_extensions(d):
-    extensions = set()
-    fstypes = d.getVar('IMAGE_FSTYPES').split()
-    fstypes_exclude = d.getVar('ARCHIVE_RELEASE_IMAGE_FSTYPES_EXCLUDE').split()
-    for type in fstypes:
-        if type in fstypes_exclude:
-            continue
-        extension = d.getVar('IMAGE_EXTENSION_%s' % type) or type
-        extensions.add(extension)
-    return ' '.join(sorted(extensions))
-    d.setVar('IMAGE_EXTENSIONS', ' '.join(sorted(extensions)))
+# `downloads` artifact configuration {{{1
+# Default values if archive-release-downloads is not inherited
+LAYERS_OWN_DOWNLOADS ?= ""
+LAYERS_OWN_DOWNLOADS[doc] = "Names of layers whose downloads should be shipped inside the layer itself, self contained."
+RELEASE_EXCLUDED_SOURCES ?= ""
+RELEASE_EXCLUDED_SOURCES[doc] = "Patterns of files in ARCHIVE_RELEASE_DL_DIR to exclude"
 
-# If a wic image is enabled, that's all we want
-IMAGE_EXTENSIONS_FULL = "${@image_extensions(d)}"
-IMAGE_EXTENSIONS_WIC = "${@' '.join(e for e in d.getVar('IMAGE_EXTENSIONS_FULL').split() if 'wic' in e)}"
-IMAGE_EXTENSIONS ?= "${@d.getVar('IMAGE_EXTENSIONS_WIC') if d.getVar('IMAGE_EXTENSIONS_WIC') else d.getVar('IMAGE_EXTENSIONS_FULL')}"
+# Ensure we include all the uninative tarballs in our `downloads` artifact
+SRC_URI += "${@' '.join(uninative_urls(d)) if 'downloads' in '${RELEASE_ARTIFACTS}'.split() else ''}"
+
+def uninative_urls(d):
+    l = d.createCopy()
+    for arch, chksum in d.getVarFlags("UNINATIVE_CHECKSUM").items():
+        if chksum:
+            l.setVar('BUILD_ARCH', arch)
+            srcuri = l.expand("${UNINATIVE_URL}${UNINATIVE_TARBALL};sha256sum=%s;unpack=no;subdir=uninative/%s;downloadfilename=uninative/%s/${UNINATIVE_TARBALL}" % (chksum, chksum, chksum))
+            yield srcuri
+
+ARCHIVE_RELEASE_DL_DIR ?= "${DL_DIR}"
+ARCHIVE_RELEASE_DL_TOPDIR ?= "${ARCHIVE_RELEASE_DL_DIR}"
+# }}}1
+
+FLEXDIR ?= "${COREBASE}/.."
 
 python () {
     # Make sure FLEXDIR is absolute, as we use it in transforms
@@ -105,14 +112,6 @@ python () {
         d.setVarFlag(ctask, 'stamp-extra-info', '${MACHINE}')
         d.appendVarFlag(ctask, 'postfuncs', ' compress_binary_artifacts')
 }
-
-def uninative_urls(d):
-    l = d.createCopy()
-    for arch, chksum in d.getVarFlags("UNINATIVE_CHECKSUM").items():
-        if chksum:
-            l.setVar('BUILD_ARCH', arch)
-            srcuri = l.expand("${UNINATIVE_URL}${UNINATIVE_TARBALL};sha256sum=%s;unpack=no;subdir=uninative/%s;downloadfilename=uninative/%s/${UNINATIVE_TARBALL}" % (chksum, chksum, chksum))
-            yield srcuri
 
 release_tar () {
     tar --absolute-names --exclude=.svn \
