@@ -424,7 +424,7 @@ do_prepare_release[stamp-extra-info] = "${MACHINE}"
 addtask do_prepare_release before do_build after do_patch
 
 # Ensure that all our dependencies are entirely built
-do_archive_images[depends] += "${@'${RELEASE_IMAGE}:do_${BB_DEFAULT_TASK}' if '${RELEASE_IMAGE}' else ''}"
+do_archive_images[depends] += "${@'${RELEASE_IMAGE}:do_image_complete' if '${RELEASE_IMAGE}' else ''}"
 
 # When archiving downloads, make sure they're fetched
 FETCHALL_TASK = "${@'do_archive_release_downloads_all' if oe.utils.inherits(d, 'archive-release-downloads') else 'do_fetchall'}"
