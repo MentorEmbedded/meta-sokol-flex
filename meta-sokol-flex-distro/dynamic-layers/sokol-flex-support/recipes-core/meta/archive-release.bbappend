@@ -216,8 +216,6 @@ python do_archive_flex_layers () {
             remotes = get_remotes(subdir, d) or {}
         else:
             remotes = {}
-        pack_base, head = git_archive(subdir, objdir, message, keep_paths, remotes)
-
         if not remotes:
             bb.note('Skipping remotes for %s' % path)
 
