@@ -30,18 +30,8 @@ CONF_INSTALL_PATH ?= "${BSPFILES_INSTALL_PATH}/conf"
 ARCHIVE_RELEASE_DL_DIR ?= "${DL_DIR}"
 ARCHIVE_RELEASE_DL_TOPDIR ?= "${ARCHIVE_RELEASE_DL_DIR}"
 
-# Default to shipping update-* as individual artifacts
-def configured_update_layers(d):
-    """Return the configured layers whose basenames are update-*"""
-    update_layers = set()
-    for layer in d.getVar('BBLAYERS').split():
-        basename = os.path.basename(layer)
-        if basename.startswith('update-'):
-            update_layers.add(layer)
-    return ' '.join(sorted(update_layers))
-
 SUBLAYERS_INDIVIDUAL_ONLY ?= ""
-SUBLAYERS_INDIVIDUAL_ONLY_TOPLEVEL ?= "${@configured_update_layers(d)}"
+SUBLAYERS_INDIVIDUAL_ONLY_TOPLEVEL ?= ""
 
 DEPLOY_DIR_RELEASE ?= "${DEPLOY_DIR}/release-artifacts"
 RELEASE_ARTIFACTS ?= "layers bitbake images downloads"
@@ -57,7 +47,7 @@ BINARY_ARTIFACTS_COMPRESSION ?= ""
 BINARY_ARTIFACTS_COMPRESSION[doc] = "Compression type for images and downloads artifacts.\
  Available: '.bz2' and '.gz'. No compression if empty"
 
-LAYERS_OWN_DOWNLOADS ?= "${@' '.join(l for l in '${BBFILE_COLLECTIONS}'.split() if l.startswith('update-'))}"
+LAYERS_OWN_DOWNLOADS ?= ""
 LAYERS_OWN_DOWNLOADS[doc] = "Names of layers whose downloads should be shipped inside the layer itself, self contained."
 
 IMAGE_BASENAME = "${RELEASE_IMAGE}"
