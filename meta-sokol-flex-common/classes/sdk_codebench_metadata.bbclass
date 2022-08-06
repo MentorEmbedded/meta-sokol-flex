@@ -24,7 +24,17 @@ CODEBENCH_SDK_VARS += "\
     SDK_TITLE \
     SDK_VERSION \
     gdb_serverpath=${bindir}/gdbserver \
+    TOOLCHAIN_PATH \
+    TOOLCHAIN_GDB_PATH \
 "
+
+TOOLCHAIN_PATH = "${SDKPATHNATIVE}${bindir_nativesdk}/${TARGET_SYS}"
+TOOLCHAIN_GDB_PATH = "${TOOLCHAIN_PATH}/${TARGET_PREFIX}gdb"
+
+SDKPATHTOOLCHAIN ?= "${SDKPATH}/toolchain"
+EXTERNAL_TOOLCHAIN_RELBIN = "${@os.path.relpath(d.getVar('EXTERNAL_TOOLCHAIN_BIN'), d.getVar('EXTERNAL_TOOLCHAIN'))}"
+TOOLCHAIN_PATH:tcmode-external-oe-sdk = "${SDKPATHTOOLCHAIN}/${EXTERNAL_TOOLCHAIN_RELBIN}"
+
 CODEBENCH_SDK_VARS:append:tcmode-external-sourcery = "\
     SOURCERY_VERSION \
     TOOLCHAIN_VERSION=${@d.getVar('SOURCERY_VERSION').split('-', 1)[0]} \
