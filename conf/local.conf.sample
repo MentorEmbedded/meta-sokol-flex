@@ -151,9 +151,6 @@ SSTATE_MIRROR_SITES += "\
 # Valid values: i686, x86_64, i686-mingw32, x86_64-mingw32
 #SDKMACHINE ?= "x86_64"
 
-# Uncomment to make populate_sdk write a tar file rather than a .sh installer
-#SDK_PACKAGING_FUNC = ""
-
 # By default, only include the target sysroot in the SDK, not host tools.
 # Comment this line to change that. This packagegroup includes host tools like
 # autoconf, automake, etc.
