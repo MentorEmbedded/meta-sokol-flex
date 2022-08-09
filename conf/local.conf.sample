@@ -64,10 +64,6 @@ CORE_IMAGE_EXTRA_INSTALL += "${@bb.utils.contains('IMAGE_FEATURES', 'read-only-r
 #USER_FEATURES += "ptest"
 #EXTRA_IMAGE_FEATURES += "ptest-pkgs"
 
-# Example of how to add additional image types beyond the default. If the
-# machine doesn't define them, the default types are tar.bz2 and ext3.
-#IMAGE_FSTYPES:append = " jffs2"
-
 # Uncomment and alter to set the root password. Set to '0' to explicitly allow
 # the empty root password even in production-image. Set to '*' to explicitly
 # disable root login.
