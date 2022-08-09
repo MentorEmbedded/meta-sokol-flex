@@ -1,9 +1,7 @@
 # Distro is set to Sokol Flex OS distro.
 DISTRO = 'sokol-flex'
 
-# You need to select a specific machine to target the build with. There are a selection
-# of emulated machines available which can boot and run in the QEMU emulator:
-# qemuarm, qemumips, qemuppc, qemux86, qemux86-64.
+# The specific target machine for this build. Automatically set by setup-environment.
 MACHINE ??= "qemux86"
 
 # The path to the toolchains installed with CodeBench. Default value: ${FLEXDIR}/toolchains,
@@ -20,7 +18,7 @@ MACHINE ??= "qemux86"
 #CORE_IMAGE_EXTRA_INSTALL += "bash"
 
 # The EXTRA_IMAGE_FEATURES variable allows groups of packages to be added to
-# the generated images. Some of these options are added to certain image types
+# all generated images. Some of these options are added to certain image types
 # automatically. The variable can contain the following options:
 #
 #  "graphics"        - add a graphical environment, defaulting to wayland/weston
@@ -49,9 +47,11 @@ MACHINE ??= "qemux86"
 # meta/classes/image.bbclass and meta/classes/core-image.bbclass for more
 # details.
 
+EXTRA_IMAGE_FEATURES ?= "multilib-runtime"
+
+# Image features for development-image
 IMAGE_FEATURES_DEVELOPMENT ?= "debug-tweaks"
 IMAGE_FEATURES_DEVELOPMENT:append:feature-flex-bsp = " codebench-debug ssh-server-openssh tools-profile"
-EXTRA_IMAGE_FEATURES = "${IMAGE_FEATURES_DEVELOPMENT} multilib-runtime"
 
 # Image features for production-image
 IMAGE_FEATURES_PRODUCTION ?= ""
@@ -74,8 +74,8 @@ CORE_IMAGE_EXTRA_INSTALL += "${@bb.utils.contains('IMAGE_FEATURES', 'read-only-r
 #ROOT_PASSWORD = "0"
 IMAGE_CLASSES:append = " image-root-password"
 
-# User features lets you manipulate the distro features. To add a distro
-# feature, simply add it to USER_FEATURES. To remove, prefix it with ~.
+# User features lets you more easily manipulate the distro features. To add a
+# distro feature, simply add it to USER_FEATURES. To remove, prefix it with ~.
 #
 # # Disable x11
 # USER_FEATURES += "~x11"
