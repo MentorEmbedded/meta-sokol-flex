@@ -168,15 +168,6 @@ TOOLCHAIN_HOST_TASK:remove = "${TOOLCHAIN_HOST_REMOVE}"
 # example, to add libncurses:
 #TOOLCHAIN_TARGET_TASK_EXTRA += "ncurses-libncurses"
 
-# Uncomment to set a title for the SDK
-# Default: SDK for ${SDK_IDENTIFIER}
-#SDK_TITLE ?= "My Company's SDK for ${SDK_IDENTIFIER}"
-
-# Uncomment to alter the identifier for the SDK. This mechanism is used to
-# isolate the SDK on disk, as well as the installers.
-# Default: ${SDKMACHINE}-${IMAGE_BASENAME}-${MACHINE}-${SDK_VERSION}
-#SDK_IDENTIFIER ?= "${SDKMACHINE}-${IMAGE_BASENAME}-${MACHINE}-${SDK_VERSION}.customized"
-
 # The following is a list of additional classes to use when building which
 # enable extra features. Some available options which can be included in this variable
 # are:
