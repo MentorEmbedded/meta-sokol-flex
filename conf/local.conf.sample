@@ -199,9 +199,6 @@ USER_CLASSES ?= "buildstats"
 # newer Konsole versions behave
 #OE_TERMINAL = "auto"
 
-# Uncomment to automatically spawn a terminal if a patch fails to apply
-#PATCHRESOLVE = "user"
-
 # Archive the source and put them to ${DEPLOY_DIR}/sources/.
 #
 #INHERIT += "archiver"
