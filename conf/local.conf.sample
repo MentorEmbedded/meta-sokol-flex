@@ -128,11 +128,6 @@ SSTATE_MIRROR_SITES += "\
     file://${FLEXDIR}/cached-binaries \
 "
 
-# Where to place the build output and temporary artifacts
-#
-# The default value follows:
-#TMPDIR = "${TOPDIR}/tmp"
-
 #
 # Package Management configuration
 #
