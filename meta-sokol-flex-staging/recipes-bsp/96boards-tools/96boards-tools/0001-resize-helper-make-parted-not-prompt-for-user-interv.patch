@@ -1,0 +1,32 @@
+From e967b17c58393eedbfc6112ccd30597f157058a5 Mon Sep 17 00:00:00 2001
+From: Awais Belal <awais_belal@mentor.com>
+Date: Wed, 10 Aug 2022 05:51:05 +0500
+Subject: [PATCH] resize-helper: make parted not prompt for user intervention
+
+If the device/part being resized is mounted parted asks for a confirmation
+and waits for user input which does not work well in automatic resizing use
+cases. We enable the script mode which prints a warning but continues without
+user intervention.
+
+Upstream-status: Pending
+
+Signed-off-by: Awais Belal <awais_belal@mentor.com>
+---
+ resize-helper | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/resize-helper b/resize-helper
+index 86882f6..7c12cbe 100755
+--- a/resize-helper
++++ b/resize-helper
+@@ -57,6 +57,6 @@ if [ "$PART_TABLE_TYPE" = "gpt" ]; then
+ 	${SGDISK} -e ${DEVICE}
+ 	${PARTPROBE}
+ fi
+-${PARTED} -m ${DEVICE} u s resizepart ${PART_ENTRY_NUMBER} ${END_SIZE}
++${PARTED} -s -m ${DEVICE} u s resizepart ${PART_ENTRY_NUMBER} ${END_SIZE}
+ ${PARTPROBE}
+ ${RESIZE2FS} "${ROOT_DEVICE}"
+-- 
+2.17.1
+
