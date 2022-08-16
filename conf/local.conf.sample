@@ -1,3 +1,7 @@
+## For additional configuration examples, see also
+## oe-core/meta/conf/local.conf.sample and
+## oe-core/meta/conf/local.conf.sample.extended.
+
 # Distro is set to Sokol Flex OS distro.
 DISTRO = 'sokol-flex'
 
