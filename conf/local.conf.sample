@@ -248,10 +248,6 @@ USER_CLASSES ?= "buildstats"
 #    file:///some/local/dir \
 #"
 
-# This may be used to abort the build when using an untested/unverified
-# version of the external toolchain.
-#SOURCERY_VERSION_REQUIRED = "2012.03"
-
 # The following options will build a companion 'debug filesystem' in addition
 # to the normal deployable filesystem.  This companion system allows a
 # debugger to know the symbols and related sources.  It can be used to
