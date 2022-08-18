@@ -110,10 +110,7 @@ DL_DIR ?= "${FLEXDIR}/downloads"
 # cache objects and this variable determines where those files are placed.
 SSTATE_DIR ?= "${FLEXDIR}/cached-binaries"
 
-# Continue to pull cached binaries and downloads from the Sokol Flex OS install
-SSTATE_MIRROR_SITES += "\
-    file://${FLEXDIR}/${MACHINE}/cached-binaries \
-"
+# Continue to pull downloads from the Sokol Flex OS install
 PREMIRRORS:prepend = "\
     .*://.*/.* file://${FLEXDIR}/${MACHINE}/downloads/ \n \
 "
