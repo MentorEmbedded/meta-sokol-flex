@@ -90,17 +90,9 @@ IMAGE_CLASSES:append = " image-root-password"
 # Uncomment to exclude GPLv3 software from the build
 #INCOMPATIBLE_LICENSE = "GPL-3.0* LGPL-3.0*"
 
-# Uncomment this to enable inclusion of gdbserver in the codebench-debug
-# packagegroup / image feature even when GPL-3.0 is in INCOMPATIBLE_LICENSE, or
-# using a distro which sets it that way (atp).
-#ALLOW_GPLV3_GDBSERVER = "1"
-
-# The gplv2 binutils does not support aarch64, so the gplv3 version is built and
-# installed with tools-profile on that architecture by default, even in a
-# non-gplv3 build. To disable this, you may comment this out, comment out line
-# which installs binutils, or remove tools-profile from EXTRA_IMAGE_FEATURES.
-INCOMPATIBLE_LICENSE_EXCEPTIONS:append:aarch64 = " ${BINUTILS_EXCEPTION}"
-BINUTILS_EXCEPTION = "${@'binutils:GPL-3.0-only' if d.getVar('PN') == 'binutils' or (bb.data.inherits_class('image', d) and bb.utils.filter('IMAGE_FEATURES', 'tools-profile', d) == 'tools-profile') else ''}"
+# Exceptions can be made for GPL-3.0 software that's required for development or
+# profiling, for example, gdbserver for debugging and binutils for lttng profiling.
+#INCOMPATIBLE_LICENSE_EXCEPTIONS += "binutils:GPL-3.0-only gdbserver-external:GPL-3.0"
 
 # Our download directory / cache for the workspace
 DL_DIR ?= "${FLEXDIR}/downloads"
