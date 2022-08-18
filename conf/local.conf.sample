@@ -102,13 +102,6 @@ IMAGE_CLASSES:append = " image-root-password"
 INCOMPATIBLE_LICENSE_EXCEPTIONS:append:aarch64 = " ${BINUTILS_EXCEPTION}"
 BINUTILS_EXCEPTION = "${@'binutils:GPL-3.0-only' if d.getVar('PN') == 'binutils' or (bb.data.inherits_class('image', d) and bb.utils.filter('IMAGE_FEATURES', 'tools-profile', d) == 'tools-profile') else ''}"
 
-# Download files from a mirror
-# Uncomment this INHERIT, and define SOURCE_MIRROR_URL
-#
-#INHERIT += "own-mirrors"
-#SOURCE_MIRROR_URL = "file:///cache/downloads"
-#SOURCE_MIRROR_URL = "http://myserver/sources"
-
 # Our download directory / cache for the workspace
 DL_DIR ?= "${FLEXDIR}/downloads"
 
@@ -124,6 +117,30 @@ SSTATE_MIRROR_SITES += "\
 PREMIRRORS:prepend = "\
     .*://.*/.* file://${FLEXDIR}/${MACHINE}/downloads/ \n \
 "
+
+# Download files from a mirror
+# Uncomment this INHERIT, and define SOURCE_MIRROR_URL
+#
+#INHERIT += "own-mirrors"
+#SOURCE_MIRROR_URL = "file:///cache/downloads"
+#SOURCE_MIRROR_URL = "http://myserver/sources"
+
+# Shared-state files from other locations
+#
+# The SSTATE_MIRROR_SITES variable can be used to configure the system to
+# search other mirror locations for these objects before it builds the data
+# itself.
+#
+# This can be a filesystem directory, or a remote url such as http or ftp.
+# These would contain the sstate-cache results from previous builds (possibly
+# from other machines). This variable works like fetcher MIRRORS/PREMIRRORS
+# and points to the cache locations to check for the shared objects.
+#
+#SSTATE_MIRROR_SITES += "http://mymirror/sstate"
+#SSTATE_MIRROR_SITES += "\
+#    http://someserver.tld/share/sstate \
+#    file:///some/local/dir \
+#"
 
 # SDK target architecture
 #
@@ -193,23 +210,6 @@ USER_CLASSES ?= "buildstats"
 #    target, native, nativesdk, cross, crosssdk and cross-canadian,
 #    you can set one or more types. Archive all types by default.
 #COPYLEFT_RECIPE_TYPES = 'target'
-
-# Shared-state files from other locations
-#
-# The SSTATE_MIRROR_SITES variable can be used to configure the system to
-# search other mirror locations for these objects before it builds the data
-# itself.
-#
-# This can be a filesystem directory, or a remote url such as http or ftp.
-# These would contain the sstate-cache results from previous builds (possibly
-# from other machines). This variable works like fetcher MIRRORS/PREMIRRORS
-# and points to the cache locations to check for the shared objects.
-#
-#SSTATE_MIRROR_SITES += "http://mymirror/sstate"
-#SSTATE_MIRROR_SITES += "\
-#    http://someserver.tld/share/sstate \
-#    file:///some/local/dir \
-#"
 
 # CONF_VERSION is increased each time build/conf/ changes incompatibly and is used to
 # track the version of this file when it was generated. This can safely be ignored if
