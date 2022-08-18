@@ -175,22 +175,6 @@ TOOLCHAIN_HOST_TASK:remove = "${TOOLCHAIN_HOST_REMOVE}"
 #   - 'buildstats' to collect build statistics (e.g. task times)
 USER_CLASSES ?= "buildstats"
 
-# Interactive shell configuration
-#
-# Under certain circumstances the system may need input from you and to do this it
-# can launch an interactive shell. It needs to do this since the build is
-# multithreaded and needs to be able to handle the case where more than one parallel
-# process may require the user's attention. The default is iterate over the available
-# terminal types to find one that works.
-#
-# Examples of the occasions this may happen are when resolving patches which cannot
-# be applied, to use the devshell or the kernel menuconfig
-#
-# Supported values are auto, gnome, xfce, rxvt, screen, konsole (KDE 3.x only), none
-# Note: currently, Konsole support only works for KDE 3.x due to the way
-# newer Konsole versions behave
-#OE_TERMINAL = "auto"
-
 # Archive the source and put them to ${DEPLOY_DIR}/sources/.
 #
 #INHERIT += "archiver"
