@@ -132,20 +132,6 @@ SSTATE_MIRROR_SITES += "\
     file://${FLEXDIR}/cached-binaries \
 "
 
-#
-# Package Management configuration
-#
-# This variable lists which packaging formats to enable. Multiple package backends
-# can be enabled at once and the first item listed in the variable will be used
-# to generate the root filesystems.
-#
-#  - 'package_deb' for debian style deb files
-#  - 'package_ipk' for ipk files are used by opkg (a debian style embedded package manager)
-#  - 'package_rpm' for rpm style packages
-#
-# We default to ipk:
-#PACKAGE_CLASSES ?= "package_ipk"
-
 # SDK target architecture
 #
 # Set to one of the mingw32 SDKMACHINEs to target Windows rather than Linux.
