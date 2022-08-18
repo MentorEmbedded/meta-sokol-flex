@@ -4,7 +4,8 @@
 
 create_sdk_files:append () {
     script=${SDK_OUTPUT}/${SDKPATH}/environment-setup-${REAL_MULTIMACH_TARGET_SYS}
-    cat >"${script}.new" <<END
+    if [ -e "$script" ]; then
+        cat >"${script}.new" <<END
 if [ -n "\$BASH_SOURCE" ] || [ -n "\$ZSH_NAME" ]; then
     if [ -n "\$BASH_SOURCE" ]; then
         scriptdir="\$(cd "\$(dirname "\$BASH_SOURCE")" && pwd)"
@@ -18,6 +19,7 @@ else
     scriptdir="${SDKPATH}"
 fi
 END
-    sed -e "s#${SDKPATH}#\$scriptdir#g" "$script" >>"${script}.new"
-    mv "${script}.new" "${script}"
+        sed -e "s#${SDKPATH}#\$scriptdir#g" "$script" >>"${script}.new"
+        mv "${script}.new" "${script}"
+    fi
 }
