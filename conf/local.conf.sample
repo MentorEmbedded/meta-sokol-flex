@@ -112,21 +112,17 @@ BINUTILS_EXCEPTION = "${@'binutils:GPL-3.0-only' if d.getVar('PN') == 'binutils'
 # Our download directory / cache for the workspace
 DL_DIR ?= "${FLEXDIR}/downloads"
 
-# Continue to pull downloads from the build dir if available
-PREMIRRORS:prepend = "\
-    .*://.*/.* file://${FLEXDIR}/${MACHINE}/downloads/ \n \
-    .*://.*/.* file://${TOPDIR}/downloads/ \n \
-"
-
 # BitBake has the capability to accelerate builds based on previously built
 # output. This is done using "shared state" files which can be thought of as
 # cache objects and this variable determines where those files are placed.
-SSTATE_DIR ?= "${TOPDIR}/cached-binaries"
+SSTATE_DIR ?= "${FLEXDIR}/cached-binaries"
 
-# Continue to pull cached binaries from the Sokol Flex OS install
+# Continue to pull cached binaries and downloads from the Sokol Flex OS install
 SSTATE_MIRROR_SITES += "\
     file://${FLEXDIR}/${MACHINE}/cached-binaries \
-    file://${FLEXDIR}/cached-binaries \
+"
+PREMIRRORS:prepend = "\
+    .*://.*/.* file://${FLEXDIR}/${MACHINE}/downloads/ \n \
 "
 
 # SDK target architecture
