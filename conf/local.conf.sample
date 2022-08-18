@@ -218,18 +218,6 @@ USER_CLASSES ?= "buildstats"
 #    file:///some/local/dir \
 #"
 
-# The following options will build a companion 'debug filesystem' in addition
-# to the normal deployable filesystem.  This companion system allows a
-# debugger to know the symbols and related sources.  It can be used to
-# debug a remote 'production' system without having to add the debug symbols
-# and sources to remote system.  If IMAGE_FSTYPES_DEBUGFS is not defined, it
-# defaults to IMAGE_FSTYPES.
-#IMAGE_GEN_DEBUGFS = "1"
-#IMAGE_FSTYPES_DEBUGFS = "tar.gz"
-#
-# Use this to add extra packages to the split-debug filesystem
-#EXTRA_DEBUG_PACKAGES = "ltrace strace"
-
 # CONF_VERSION is increased each time build/conf/ changes incompatibly and is used to
 # track the version of this file when it was generated. This can safely be ignored if
 # this doesn't mean anything to you.
