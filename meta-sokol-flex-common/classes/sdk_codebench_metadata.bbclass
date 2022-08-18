@@ -5,11 +5,11 @@
 # Write additiional metadata for CodeBench to the SDK when codebench-metadata is
 # in SDKIMAGE_FEATURES.
 
-inherit sdk_extra_vars codebench-environment-setup-d-hack
+inherit sdk_multilib_hook sdk_extra_vars codebench-environment-setup-d-hack
 
 OVERRIDES =. "${@bb.utils.contains('SDKIMAGE_FEATURES', 'codebench-metadata', 'sdk-codebench-metadata:', '', d)}"
 
-SDK_POSTPROCESS_COMMAND:prepend:sdk-codebench-metadata = "adjust_sdk_script_codebench; write_codebench_metadata;"
+SDK_POSTPROCESS_MULTILIB_COMMAND:prepend:sdk-codebench-metadata = "adjust_sdk_script_codebench; write_cb_mbs_options;"
 
 TOOLCHAIN_HOST_TASK:append:sdk-codebench-metadata = " ${@bb.utils.contains('BBFILE_COLLECTIONS', 'sokol-flex-support', 'nativesdk-relocate-makefile', '', d)}"
 TOOLCHAIN_TARGET_TASK:append:sdk-codebench-metadata = " ${@bb.utils.contains('BBFILE_COLLECTIONS', 'sokol-flex-support', 'codebench-makefile', '', d)}"
@@ -69,7 +69,7 @@ CB_MBS_IGNORED_FLAGS[doc] = "General flag arguments we don't want to include."
 
 adjust_sdk_script_codebench () {
     # Determine the script's location relative to itself rather than hardcoding it
-    script=${SDK_OUTPUT}/${SDKPATH}/environment-setup-${REAL_MULTIMACH_TARGET_SYS}
+    script="${SDK_ENV_SETUP_SCRIPT}"
     if [ -e "$script" ]; then
         cat >"${script}.new" <<END
 if [ -n "\$BASH_SOURCE" ] || [ -n "\$ZSH_NAME" ]; then
@@ -87,40 +87,14 @@ fi
 END
         sed -e "s#${SDKPATH}#\$scriptdir#g" "$script" >>"${script}.new"
         mv "${script}.new" "${script}"
-
-        # Add variables from SDK_EXTRA_VARS
-        cat <<END >>"$script"
-${@sdk_extra_var_lines(d)}
-END
     fi
 }
 
-python write_codebench_metadata () {
-    localdata = bb.data.createCopy(d)
+SDK_CB_OPTIONS = "${SDK_OUTPUT}/${SDKPATH}/cb-mbs-options-${REAL_MULTIMACH_TARGET_SYS}"
 
-    # make sure we only use the WORKDIR value from 'd', or it can change
-    localdata.setVar('WORKDIR', d.getVar('WORKDIR'))
+python write_cb_mbs_options() {
+    optionsfile = d.getVar('SDK_CB_OPTIONS')
 
-    # make sure we only use the SDKTARGETSYSROOT value from 'd'
-    localdata.setVar('SDKTARGETSYSROOT', d.getVar('SDKTARGETSYSROOT'))
-    localdata.setVar('libdir', d.getVar('target_libdir', False))
-
-    write_cb_mbs_options(localdata, localdata.expand('${SDK_OUTPUT}/${SDKPATH}/cb-mbs-options-${REAL_MULTIMACH_TARGET_SYS}'))
-
-    if not d.getVar("MLPREFIX"):
-        variants = d.getVar("MULTILIB_VARIANTS") or ""
-        for item in variants.split():
-            ld2 = localdata.createCopy()
-            # Load overrides from 'd' to avoid having to reset the value...
-            overrides = d.getVar("OVERRIDES", False) + ":virtclass-multilib-" + item
-            ld2.setVar("OVERRIDES", overrides)
-            ld2.setVar("MLPREFIX", item + "-")
-
-            write_cb_mbs_options(ld2, ld2.expand('${SDK_OUTPUT}/${SDKPATH}/cb-mbs-options-${REAL_MULTIMACH_TARGET_SYS}'))
-}
-write_codebench_metadata[vardepsexclude] += "OVERRIDES"
-
-def write_cb_mbs_options(d, optionsfile):
     # We don't care about flags like debugging, optimization. TUNE_CCARGS is
     # already covered.
     l = d.createCopy()
@@ -131,7 +105,7 @@ def write_cb_mbs_options(d, optionsfile):
     bb.utils.mkdirhier(os.path.dirname(optionsfile))
     with open(optionsfile, 'w') as f:
         f.writelines('%s=%s\n' % (k, d.expand(v)) for k, v in sorted(options.items()))
-
+}
 write_cb_mbs_options[vardeps] += "${@' '.join('CB_MBS_OPTIONS[%s]' % f for f in (d.getVarFlags('CB_MBS_OPTIONS') or []))}"
 
 def get_cb_options(d):
