@@ -2,12 +2,23 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-# In most cases, it's better to use environment-setup.d for this, but there
-# are cases where it's useful to add to the main env setup script.
+inherit sdk_multilib_hook
 
+# In most cases, it's better to use environment-setup.d for this, but there
+# are cases where it's useful to add to the main env setup scripts
 EXTRA_SDK_VARS ?= ""
 EXTRA_EXPORTED_SDK_VARS ?= ""
 EXTRA_SDK_LINES ?= ""
+
+SDK_POSTPROCESS_MULTILIB_COMMAND += "add_sdk_extra_vars;"
+
+add_sdk_extra_vars () {
+    if [ -e "${SDK_ENV_SETUP_SCRIPT}" ]; then
+        cat <<END >>"${SDK_ENV_SETUP_SCRIPT}"
+${@sdk_extra_var_lines(d)}
+END
+    fi
+}
 
 def sdk_extra_var_lines(d):
     lines = []
@@ -45,9 +56,3 @@ def sdk_extra_var_lines(d):
     extra_lines = d.getVar('EXTRA_SDK_LINES', True).replace('\\n', '\n').split('\n')
     lines.extend(extra_lines)
     return '\n'.join(lines)
-
-toolchain_shared_env_script:append () {
-    cat <<END >>"$script"
-${@sdk_extra_var_lines(d)}
-END
-}
