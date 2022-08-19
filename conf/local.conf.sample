@@ -1,29 +1,25 @@
 ## For additional configuration examples, see also
 ## oe-core/meta/conf/local.conf.sample and
-## oe-core/meta/conf/local.conf.sample.extended.
+## oe-core/meta/conf/local.conf.sample.extended
 
-# Distro is set to Sokol Flex OS distro.
+# Distro is set to Sokol Flex OS
 DISTRO = 'sokol-flex'
 
-# The specific target machine for this build. Automatically set by setup-environment.
+# The target machine for this build. Automatically set by setup-environment.
 MACHINE ??= "qemux86"
 
 # The path to the toolchains installed with CodeBench. Default value: ${FLEXDIR}/toolchains,
 # where FLEXDIR is the path to your Sokol Flex OS workspace.
 #TOOLCHAINS_PATH ?= "${FLEXDIR}/toolchains"
 
-# Uncomment to use the oe/yocto-built toolchain rather than the external
+# Use the oe/yocto-built toolchain rather than the external
 #TCMODE:sokol-flex = "default"
 
-# The CORE_IMAGE_EXTRA_INSTALL variable allows extra individual packages to be
-# added to any of the images inheriting core-image.bbclass, including the
-# "core" images (e.g. core-image-base, core-image-minimal) as well as
-# development-image and production-image..
+# Add additional packages to images
 #CORE_IMAGE_EXTRA_INSTALL += "bash"
 
 # The EXTRA_IMAGE_FEATURES variable allows groups of packages to be added to
-# all generated images. Some of these options are added to certain image types
-# automatically. The variable can contain the following options:
+# all generated images. For example:
 #
 #  "graphics"        - add a graphical environment, defaulting to wayland/weston
 #                      or x11 depending on vendor support.
@@ -50,7 +46,6 @@ MACHINE ??= "qemux86"
 # There are other options that can be used here, see
 # meta/classes/image.bbclass and meta/classes/core-image.bbclass for more
 # details.
-
 EXTRA_IMAGE_FEATURES ?= "multilib-runtime"
 
 # Image features for development-image
@@ -61,21 +56,18 @@ IMAGE_FEATURES_DEVELOPMENT:append:feature-flex-bsp = " codebench-debug ssh-serve
 IMAGE_FEATURES_PRODUCTION ?= ""
 IMAGE_FEATURES_DISABLED_PRODUCTION ?= "${IMAGE_FEATURES_DEVELOPMENT} ssh-server-dropbear"
 
-# Uncomment to enable runtime testing with ptest
-#USER_FEATURES += "ptest"
-#EXTRA_IMAGE_FEATURES += "ptest-pkgs"
-
-# Uncomment and alter to set the root password. Set to '0' to explicitly allow
-# the empty root password even in production-image. Set to '*' to explicitly
-# disable root login.
+# Set the root password. Set to '0' to explicitly set and allow the empty root
+# password even in production-image. Set to '*' to explicitly disable root
+# login.
 #ROOT_PASSWORD = "0"
 IMAGE_CLASSES:append = " image-root-password"
 
-# User features lets you more easily manipulate the distro features. To add a
-# distro feature, simply add it to USER_FEATURES. To remove, prefix it with ~.
-#
-# Disable x11
+# Enable and disable distro features. To disable a feature, prefix it with ~
 #USER_FEATURES += "~x11"
+
+# Enable runtime testing with ptest
+#USER_FEATURES += "ptest"
+#EXTRA_IMAGE_FEATURES += "ptest-pkgs"
 
 # How many tasks bitbake should run in parallel. Default: NUM_CPUS
 #BB_NUMBER_THREADS ?= "${@int(oe.utils.cpu_count())}"
@@ -87,115 +79,54 @@ IMAGE_CLASSES:append = " image-root-password"
 #BB_NUMBER_THREADS = "${BB_NUMBER_THREADS_SCALED}"
 #PARALLEL_MAKE = "${PARALLEL_MAKE_SCALED}"
 
-# Uncomment to exclude GPLv3 software from the build
+# Exclude GPLv3 software from the build
 #INCOMPATIBLE_LICENSE = "GPL-3.0* LGPL-3.0*"
 
-# Exceptions can be made for GPL-3.0 software that's required for development or
-# profiling, for example, gdbserver for debugging and binutils for lttng profiling.
+# Exceptions can be made. For example, for debugging and profiling
 #INCOMPATIBLE_LICENSE_EXCEPTIONS += "binutils:GPL-3.0-only gdbserver-external:GPL-3.0"
 
-# Our download directory / cache for the workspace
+# Download directory
 DL_DIR ?= "${FLEXDIR}/downloads"
 
-# BitBake has the capability to accelerate builds based on previously built
-# output. This is done using "shared state" files which can be thought of as
-# cache objects and this variable determines where those files are placed.
+# Prebuilt binary cache
 SSTATE_DIR ?= "${FLEXDIR}/cached-binaries"
 
 # Download files from a mirror
-# Uncomment this INHERIT, and define SOURCE_MIRROR_URL
-#
 #INHERIT += "own-mirrors"
 #SOURCE_MIRROR_URL = "file:///cache/downloads"
 #SOURCE_MIRROR_URL = "http://myserver/sources"
 
 # Shared-state files from other locations
-#
-# The SSTATE_MIRROR_SITES variable can be used to configure the system to
-# search other mirror locations for these objects before it builds the data
-# itself.
-#
-# This can be a filesystem directory, or a remote url such as http or ftp.
-# These would contain the sstate-cache results from previous builds (possibly
-# from other machines). This variable works like fetcher MIRRORS/PREMIRRORS
-# and points to the cache locations to check for the shared objects.
-#
 #SSTATE_MIRROR_SITES += "http://mymirror/sstate"
 #SSTATE_MIRROR_SITES += "\
 #    http://someserver.tld/share/sstate \
 #    file:///some/local/dir \
 #"
 
-# SDK target architecture
-#
-# Set to one of the mingw32 SDKMACHINEs to target Windows rather than Linux.
-# Warning: if you choose to add packages to TOOLCHAIN_HOST_TASK and target
-# Windows, then you must add the meta-mingw layer to your configuration.
+# Specify the architecture/os where a built SDK will be installed
+# Set to one of the mingw32 SDKMACHINEs to target Windows rather than Linux
 #
 # Valid values: i686, x86_64, i686-mingw32, x86_64-mingw32
 #SDKMACHINE ?= "x86_64"
 
-# By default, only include the target sysroot in the SDK, not host tools.
-# Comment this line to change that. This packagegroup includes host tools like
-# autoconf, automake, etc.
+# By default, include a toolchain the SDK, but not host tools like autoconf
 TOOLCHAIN_HOST_REMOVE ??= "nativesdk-packagegroup-sdk-host"
 TOOLCHAIN_HOST_TASK:remove = "${TOOLCHAIN_HOST_REMOVE}"
 
-# TOOLCHAIN_HOST_TASK is used to add host packages to the SDK, for
-# example, to add bash:
+# Add host packages to the SDK
 #TOOLCHAIN_HOST_TASK_EXTRA += "nativesdk-bash"
 
-# TOOLCHAIN_TARGET_TASK is used to add target packages to the SDK, for
-# example, to add libncurses:
+# Add target packages to the SDK
 #TOOLCHAIN_TARGET_TASK_EXTRA += "ncurses-libncurses"
 
-# The following is a list of additional classes to use when building which
-# enable extra features. Some available options which can be included in this variable
-# are:
-#   - 'buildstats' to collect build statistics (e.g. task times)
+# Enable extra classes to enable optional features. For example, 'buildstats'
+# to collect build statistics (e.g. task times)
 USER_CLASSES ?= "buildstats"
 
-# Archive the source and put them to ${DEPLOY_DIR}/sources/.
+# Enable source archival (to ${DEPLOY_DIR}/sources). See oe-core's
+# local.conf.sample.extended for details on further configuration, including
+# filtering based on license.
 #
 #INHERIT += "archiver"
-#
-# The tarball for the patched source will be created by default, and you
-# can configure the archiver as follow:
-#
-# Create archive for:
-# 1) original (or unpacked) source:
-#ARCHIVER_MODE[src] = "original"
-# 2) patched source: (default)
-#ARCHIVER_MODE[src] = "patched"
-# 3) configured source:
-#ARCHIVER_MODE[src] = "configured"
-#
-# 4) the patches between do_unpack and do_patch:
-#ARCHIVER_MODE[diff] = "1"
-# set the files that you'd like to exclude from the diff:
-#ARCHIVER_MODE[diff-exclude] ?= ".pc autom4te.cache patches"
-#
-# 5) the environment data, similar to 'bitbake -e recipe':
-#ARCHIVER_MODE[dumpdata] = "1"
-#
-# 6) the recipe (.bb and .inc):
-#ARCHIVER_MODE[recipe] = "1"
-#
-# 7) Whether output the .src.rpm package:
-#ARCHIVER_MODE[srpm] = "1"
-#
-# 8) Filter the license, the recipe whose license in
-#    COPYLEFT_LICENSE_INCLUDE will be included, and in
-#    COPYLEFT_LICENSE_EXCLUDE will be excluded.
-#COPYLEFT_LICENSE_INCLUDE = 'GPL* LGPL*'
-#COPYLEFT_LICENSE_EXCLUDE = 'CLOSED Proprietary'
-#
-# 9) Config the recipe type that will be archived, the type can be
-#    target, native, nativesdk, cross, crosssdk and cross-canadian,
-#    you can set one or more types. Archive all types by default.
-#COPYLEFT_RECIPE_TYPES = 'target'
 
-# CONF_VERSION is increased each time build/conf/ changes incompatibly and is used to
-# track the version of this file when it was generated. This can safely be ignored if
-# this doesn't mean anything to you.
 CONF_VERSION = "2"
