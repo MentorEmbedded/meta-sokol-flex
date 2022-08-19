@@ -67,11 +67,11 @@ CB_MBS_IGNORED_EXTRA_FLAGS[doc] = "Arguments we don't want to include in the ext
 CB_MBS_IGNORED_FLAGS ?= ""
 CB_MBS_IGNORED_FLAGS[doc] = "General flag arguments we don't want to include."
 
-
 adjust_sdk_script_codebench () {
     # Determine the script's location relative to itself rather than hardcoding it
     script=${SDK_OUTPUT}/${SDKPATH}/environment-setup-${REAL_MULTIMACH_TARGET_SYS}
-    cat >"${script}.new" <<END
+    if [ -e "$script" ]; then
+        cat >"${script}.new" <<END
 if [ -n "\$BASH_SOURCE" ] || [ -n "\$ZSH_NAME" ]; then
     if [ -n "\$BASH_SOURCE" ]; then
         scriptdir="\$(cd "\$(dirname "\$BASH_SOURCE")" && pwd)"
@@ -85,13 +85,14 @@ else
     scriptdir="${SDKPATH}"
 fi
 END
-    sed -e "s#${SDKPATH}#\$scriptdir#g" "$script" >>"${script}.new"
-    mv "${script}.new" "${script}"
+        sed -e "s#${SDKPATH}#\$scriptdir#g" "$script" >>"${script}.new"
+        mv "${script}.new" "${script}"
 
-    # Add variables from SDK_EXTRA_VARS
-    cat <<END >>"$script"
+        # Add variables from SDK_EXTRA_VARS
+        cat <<END >>"$script"
 ${@sdk_extra_var_lines(d)}
 END
+    fi
 }
 
 python write_codebench_metadata () {
