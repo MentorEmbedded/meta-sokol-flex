@@ -40,7 +40,7 @@ CODEBENCH_SDK_VARS:append:tcmode-external-sourcery = "\
     TOOLCHAIN_VERSION=${@d.getVar('SOURCERY_VERSION').split('-', 1)[0]} \
 "
 EXTRA_SDK_VARS:append:sdk-codebench-metadata = " ${CODEBENCH_SDK_VARS}"
-
+EXTRA_SDK_LINES:append:sdk-codebench-metadata = 'PATH=\$TOOLCHAIN_PATH:\$PATH\n'
 
 CB_MBS_OPTIONS ?= ""
 CB_MBS_OPTIONS_FEATURES_MAP ?= ""
