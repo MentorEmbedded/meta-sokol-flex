@@ -21,6 +21,8 @@ def get_generic_tune(d):
             tune += 'b'
         if 'neon' in features:
             tune += '-neon'
+    elif 'm64' in features and ('core2' in features or 'corei7' in features):
+        tune = 'x86-64'
     else:
         tune = d.getVar('DEFAULTTUNE')
     return tune
