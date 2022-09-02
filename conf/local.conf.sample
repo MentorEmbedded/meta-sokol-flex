@@ -92,6 +92,10 @@ USER_FEATURES += "~nfc"
 # How many jobs 'make' should run in parallel when compiling. Default: NUM_CPUS
 #PARALLEL_MAKE ?= "-j ${@oe.utils.cpu_count()}"
 
+# Uncomment to scale down threads and jobs when memory-per-cpu-core is low
+#BB_NUMBER_THREADS = "${BB_NUMBER_THREADS_SCALED}"
+#PARALLEL_MAKE = "${PARALLEL_MAKE_SCALED}"
+
 # Uncomment to exclude GPLv3 software from the build
 #INCOMPATIBLE_LICENSE = "GPL-3.0* LGPL-3.0*"
 
