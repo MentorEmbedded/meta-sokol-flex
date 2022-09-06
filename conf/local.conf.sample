@@ -139,10 +139,6 @@ SSTATE_MIRROR_SITES += "\
 # The default value follows:
 #TMPDIR = "${TOPDIR}/tmp"
 
-# When we're using an external toolchain, we don't want to ship a newly built
-# toolchain inside the Yocto SDK.
-include conf/include/drop-toolchain-from-sdk.inc
-
 #
 # Package Management configuration
 #
@@ -177,11 +173,11 @@ TOOLCHAIN_HOST_TASK:remove = "${TOOLCHAIN_HOST_REMOVE}"
 
 # TOOLCHAIN_HOST_TASK is used to add host packages to the SDK, for
 # example, to add bash:
-#TOOLCHAIN_HOST_TASK_EXTRA += " nativesdk-bash"
+#TOOLCHAIN_HOST_TASK_EXTRA += "nativesdk-bash"
 
 # TOOLCHAIN_TARGET_TASK is used to add target packages to the SDK, for
 # example, to add libncurses:
-#TOOLCHAIN_TARGET_TASK_EXTRA += " ncurses-libncurses"
+#TOOLCHAIN_TARGET_TASK_EXTRA += "ncurses-libncurses"
 
 # Uncomment to set a title for the SDK
 # Default: SDK for ${SDK_IDENTIFIER}
