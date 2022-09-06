@@ -78,11 +78,8 @@ SSTATE_DIR ?= "${FLEXDIR}/cached-binaries"
 #    file:///some/local/dir \
 #"
 
-# Specify the architecture/os where a built SDK will be installed
-# Set to one of the mingw32 SDKMACHINEs to target Windows rather than Linux
-#
-# Valid values: i686, x86_64, i686-mingw32, x86_64-mingw32
-#SDKMACHINE ?= "x86_64"
+# Uncomment to build a Yocto SDK for Windows rather than Linux
+#SDKMACHINE = "x86_64-mingw32"
 
 # By default, include a toolchain the SDK, but not host tools like autoconf
 TOOLCHAIN_HOST_REMOVE ??= "nativesdk-packagegroup-sdk-host"
