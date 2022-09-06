@@ -1,0 +1,3 @@
+if configured_layers | grep -qF meta-virtualization; then
+    load_lconf_snippet "$layer" "dynamic-layers/virtualization-layer/conf/local.conf.append"
+fi

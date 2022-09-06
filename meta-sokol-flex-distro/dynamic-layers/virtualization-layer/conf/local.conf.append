@@ -1,0 +1,3 @@
+# Uncomment the following to enable virtualization support
+#USER_FEATURES += "virtualization"
+EXTRA_IMAGE_FEATURES += "${@bb.utils.contains('DISTRO_FEATURES', 'virtualization', 'virtualization', '', d)}"
