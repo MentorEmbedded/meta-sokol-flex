@@ -2,7 +2,7 @@
 #
 # Must be explicitly enabled both by configuring these variables and
 # adding 'disallowed-tuning' to your WARN_QA or ERROR_QA.
-ALLOWED_TUNING ?= "${DEFAULTTUNE}"
+ALLOWED_TUNING ?= "${TUNE_PKGARCH}"
 DISALLOWED_TUNING ?= ""
 
 python required_tuning () {

@@ -16,11 +16,13 @@ def get_generic_tune(d):
             tune += '-crypto'
     # cortexa* tune files only list 'arm' in features instead of 'armv7*'
     elif 'armv7a' in features or 'armv7ve' in features or ('arm' in features and 'neon' in features):
-        tune = 'armv7athf'
+        tune = 'armv7ahf'
         if 'bigendian' in features:
             tune += 'b'
         if 'neon' in features:
             tune += '-neon'
+    elif 'm64' in features and ('core2' in features or 'corei7' in features):
+        tune = 'x86-64'
     else:
         tune = d.getVar('DEFAULTTUNE')
     return tune
