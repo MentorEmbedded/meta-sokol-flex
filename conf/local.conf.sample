@@ -19,33 +19,8 @@ MACHINE ??= "qemux86"
 #CORE_IMAGE_EXTRA_INSTALL += "bash"
 
 # The EXTRA_IMAGE_FEATURES variable allows groups of packages to be added to
-# all generated images. For example:
-#
-#  "graphics"        - add a graphical environment, defaulting to wayland/weston
-#                      or x11 depending on vendor support.
-#  "dbg-pkgs"        - add -dbg packages for all installed packages
-#                      (adds symbol information for debugging/profiling)
-#  "dev-pkgs"        - add -dev packages for all installed packages
-#                      (useful if you want to develop against libs in the image)
-#  "tools-sdk"       - add development tools (gcc, make, pkgconfig etc.)
-#  "tools-debug"     - add debugging tools (gdb, strace)
-#  "tools-profile"   - add profiling tools (oprofile, exmap, lttng valgrind (x86 only))
-#  "tools-benchmark" - add benchmarking tools (bonnie++, lmbench, etc)
-#  "tools-testapps"  - add useful testing tools (ts_print, aplay, arecord etc.)
-#  "codebench-debug" - core debug tools for use with codebench. this is
-#                      a subset of tools-debug (gdbserver, strace, sftp server)
-#  "debug-tweaks"    - make an image suitable for development
-#                      e.g. ssh root access has a blank password
-#  "splash"          - include a splashscreen (default: psplash, but the
-#                      particular package can be set with the SPLASH variable)
-#  "multimedia"      - add gstreamer support for running multimedia files
-#  "multilib-runtime" - basic runtime multilib libraries to enable execution
-#                       of third party executables and CodeBench development
-#                       on non-default archs (libgcc, libc, libstdc++, lttng)
-#
-# There are other options that can be used here, see
-# meta/classes/image.bbclass and meta/classes/core-image.bbclass for more
-# details.
+# the generated images. See the Sokol Flex OS User’s and Reference Manual for
+# supported image features.
 EXTRA_IMAGE_FEATURES ?= "multilib-runtime"
 
 # Image features for development-image
