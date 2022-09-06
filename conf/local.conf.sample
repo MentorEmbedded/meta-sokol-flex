@@ -91,10 +91,6 @@ TOOLCHAIN_HOST_TASK:remove = "${TOOLCHAIN_HOST_REMOVE}"
 # Add target packages to the SDK
 #TOOLCHAIN_TARGET_TASK_EXTRA += "ncurses-libncurses"
 
-# Enable extra classes to enable optional features. For example, 'buildstats'
-# to collect build statistics (e.g. task times)
-USER_CLASSES ?= "buildstats"
-
 # Enable source archival (to ${DEPLOY_DIR}/sources). See oe-core's
 # local.conf.sample.extended for details on further configuration, including
 # filtering based on license.
