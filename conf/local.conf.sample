@@ -5,11 +5,11 @@
 # Distro is set to Sokol Flex OS
 DISTRO = 'sokol-flex'
 
-# The target machine for this build. Automatically set by setup-environment.
+# The target machine for this build. Automatically set by setup-environment
 MACHINE ??= "qemux86"
 
 # The path to the toolchains installed with CodeBench. Default value: ${FLEXDIR}/toolchains,
-# where FLEXDIR is the path to your Sokol Flex OS workspace.
+# where FLEXDIR is the path to your Sokol Flex OS workspace
 #TOOLCHAINS_PATH ?= "${FLEXDIR}/toolchains"
 
 # Use the oe/yocto-built toolchain rather than the external
@@ -20,7 +20,7 @@ MACHINE ??= "qemux86"
 
 # The EXTRA_IMAGE_FEATURES variable allows groups of packages to be added to
 # the generated images. See the Sokol Flex OS User’s and Reference Manual for
-# supported image features.
+# supported image features
 EXTRA_IMAGE_FEATURES ?= "multilib-runtime"
 
 # Image features for development-image
@@ -33,7 +33,7 @@ IMAGE_FEATURES_DISABLED_PRODUCTION ?= "${IMAGE_FEATURES_DEVELOPMENT} ssh-server-
 
 # Set the root password. Set to '0' to explicitly set and allow the empty root
 # password even in production-image. Set to '*' to explicitly disable root
-# login.
+# login
 #ROOT_PASSWORD = "0"
 IMAGE_CLASSES:append = " image-root-password"
 
@@ -93,8 +93,7 @@ TOOLCHAIN_HOST_TASK:remove = "${TOOLCHAIN_HOST_REMOVE}"
 
 # Enable source archival (to ${DEPLOY_DIR}/sources). See oe-core's
 # local.conf.sample.extended for details on further configuration, including
-# filtering based on license.
-#
+# filtering based on license
 #INHERIT += "archiver"
 
 CONF_VERSION = "2"
