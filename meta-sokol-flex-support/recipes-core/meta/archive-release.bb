@@ -698,7 +698,8 @@ do_archive_images () {
 
     sourcery_version="$(echo ${SOURCERY_VERSION} | sed 's/-.*$//')"
     if [ -n "$sourcery_version" ]; then
-        sed -i "s,^#*\(SOURCERY_VERSION_REQUIRED =\).*,\1 \"$sourcery_version\"," local.conf.sample
+        echo >>local.conf.sample
+        echo "SOURCERY_VERSION_REQUIRED = \"$sourcery_version\"" >>local.conf.sample
     fi
 
     pdk_version="${PDK_DISTRO_VERSION}"

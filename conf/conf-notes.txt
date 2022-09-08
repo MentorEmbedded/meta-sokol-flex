@@ -1,6 +1,5 @@
 Common targets are:
 
-    core-image-base
     development-image
     production-image
 
