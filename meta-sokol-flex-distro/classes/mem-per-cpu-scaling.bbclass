@@ -6,7 +6,10 @@
 # PARALLEL_MAKE_SCALED with scaled down values.
 #
 # Inspired by https://elinux.org/images/d/d4/Goulart.pdf.
-#
+
+# Set to 0 to opt out of the warning/error message
+MEM_PER_CPU_MESSAGE ?= "1"
+
 # Configured using the MEM_PER_CPU_SCALING_THRESHOLDS variable:
 #
 # MEM_PER_CPU_THRESHOLD,THREADS,JOBS,ACTION
@@ -19,8 +22,9 @@ MEM_PER_CPU_SCALING_THRESHOLDS ?= "\
     2,cpus//2,cpus//2,WARN \
 "
 
-BB_NUMBER_THREADS_SCALED = "1"
-PARALLEL_MAKE_SCALED = "-j 1"
+# Default values to avoid errors before the ConfigParsed event is fired
+BB_NUMBER_THREADS_SCALED = "${@int(oe.utils.cpu_count())}"
+PARALLEL_MAKE_SCALED = "-j ${@oe.utils.cpu_count()}"
 
 # This function postpones warnings to reduce duplication, and postpones failures
 # to avoid breaking bitbake -e.
@@ -62,17 +66,17 @@ python mem_per_cpu_scaling() {
             suggested.append('reduce PARALLEL_MAKE to %d or less' % jobs)
         d.setVar('PARALLEL_MAKE_SCALED', '-j %s' % jobs)
 
-    if action and suggested:
+    if action and suggested and d.getVar('MEM_PER_CPU_MESSAGE') == '1':
         if action == 'FATAL':
             message = 'Very low memory per CPU core (~%s Gb) in this system' % int(mem_per_cpu)
             if suggested:
-                message += ', please %s in local.conf.' % ' and '.join(suggested)
+                message += ', please %s in local.conf, or set MEM_PER_CPU_MESSAGE="0" to disable this message.' % ' and '.join(suggested)
             d.setVar('MEM_PER_CPU_SCALING_ERROR', message)
             return
         elif action == 'WARN':
             message = 'Low memory per CPU core (~%s Gb) in this system.' % int(mem_per_cpu)
             if suggested:
-                message += ' You may wish to %s in local.conf.' % ' and '.join(suggested)
+                message += ' You may wish to %s in local.conf, or set MEM_PER_CPU_MESSAGE="0" to disable this message.' % ' and '.join(suggested)
             d.setVar('MEM_PER_CPU_SCALING_WARNING', message)
 }
 mem_per_cpu_scaling[eventmask] = "bb.event.ConfigParsed"
