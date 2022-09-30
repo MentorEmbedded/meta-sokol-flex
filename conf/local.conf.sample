@@ -24,7 +24,7 @@ MACHINE ??= "qemux86"
 EXTRA_IMAGE_FEATURES ?= "multilib-runtime"
 
 # Image features for development-image
-IMAGE_FEATURES_DEVELOPMENT ?= "debug-tweaks"
+IMAGE_FEATURES_DEVELOPMENT ?= "debug-tweaks tools-sdk"
 IMAGE_FEATURES_DEVELOPMENT:append:feature-flex-bsp = " codebench-debug ssh-server-openssh tools-profile"
 
 # Image features for production-image
