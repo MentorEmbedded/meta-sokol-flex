@@ -9,7 +9,7 @@
 # version 2.  This program  is licensed "as is" without any warranty of any
 # kind, whether express or implied.
 
-packages="python3 \
+packages="python39 \
           patch diffstat git bzip2 tar \
           gzip gawk chrpath wget cpio perl file which \
           make gcc gcc-c++ rsync rpcgen \
