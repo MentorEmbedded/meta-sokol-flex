@@ -54,12 +54,6 @@ IMAGE_CLASSES:append = " image-root-password"
 #BB_NUMBER_THREADS = "${BB_NUMBER_THREADS_SCALED}"
 #PARALLEL_MAKE = "${PARALLEL_MAKE_SCALED}"
 
-# Exclude GPLv3 software from the build
-#INCOMPATIBLE_LICENSE = "GPL-3.0* LGPL-3.0*"
-
-# Exceptions can be made. For example, for debugging and profiling
-#INCOMPATIBLE_LICENSE_EXCEPTIONS += "binutils:GPL-3.0-only gdbserver-external:GPL-3.0"
-
 # Download directory
 DL_DIR ?= "${FLEXDIR}/downloads"
 
