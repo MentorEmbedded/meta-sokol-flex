@@ -24,8 +24,7 @@ HOMEDIR=${HOME}
 HOSTINFOFILE="hostinfo.txt"    # File containing info captured from user's host
 OUTPUTDIRNAME="capdebuginfo"   # Directory containing all info captured by script
 SCRIPT_NAME="$(basename ${BASH_SOURCE})"
-MGLS_LICENSE="MGLS_LICENSE_FILE"
-LM_LICENSE="LM_LICENSE_FILE"
+SALT_LICENSE="SALT_LICENSE_SERVER"
 
 
 usage () {
@@ -264,8 +263,7 @@ else
 
 	# Collect host information
 	get_hostinfo "${OUTPUTDIRNAME}" "${HOSTINFOFILE}"
-	get_hostlicenseinfo "${OUTPUTDIRNAME}" "${HOSTINFOFILE}" "${MGLS_LICENSE}"
-	get_hostlicenseinfo "${OUTPUTDIRNAME}" "${HOSTINFOFILE}" "${LM_LICENSE}"
+	get_hostlicenseinfo "${OUTPUTDIRNAME}" "${HOSTINFOFILE}" "${SALT_LICENSE}"
 	get_hostprereqsinfo "${OUTPUTDIRNAME}" "${HOSTINFOFILE}"
 	get_flexinstallinfo "${OUTPUTDIRNAME}" "${HOSTINFOFILE}"
 	get_flexbuildinfo "${OUTPUTDIRNAME}" "${BUILDERR}" "${BUILDDIR}"
