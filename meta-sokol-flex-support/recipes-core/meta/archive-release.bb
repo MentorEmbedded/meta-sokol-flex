@@ -658,8 +658,8 @@ bb_layers[vardeps] += "repo_root"
 bb_layers[vardepsexclude] += "layer%/ topdir##*/ layer#${topdir}/"
 
 do_archive_images () {
-    echo "--transform=s,-${MACHINE},,i" >include
-    echo "--transform=s,${DEPLOY_DIR_IMAGE},${BINARY_INSTALL_PATH}," >>include
+    set -- "$@" "--transform=s,-${MACHINE},,i"
+    set -- "$@" "--transform=s,${DEPLOY_DIR_IMAGE},${BINARY_INSTALL_PATH},"
 
     for filename in ${DEPLOY_IMAGES}; do
         echo "${DEPLOY_DIR_IMAGE}/$filename" >>include
@@ -669,7 +669,7 @@ do_archive_images () {
     if [ -e "${BUILDHISTORY_DIR}" ]; then
         buildhistory-collect-srcrevs -p "${BUILDHISTORY_DIR}" >"${WORKDIR}/autorevs.conf"
         if [ -s "${WORKDIR}/autorevs.conf" ]; then
-            echo "--transform=s,${WORKDIR}/autorevs.conf,${CONF_INSTALL_PATH}/autorevs.conf," >>include
+            set -- "$@" "--transform=s,${WORKDIR}/autorevs.conf,${CONF_INSTALL_PATH}/autorevs.conf,"
             echo "${WORKDIR}/autorevs.conf" >>include
         fi
     fi
@@ -686,7 +686,7 @@ do_archive_images () {
         fi
         sed -e "s/##ROOTFS##/${RELEASE_IMAGE}.$ext/; s/##KERNEL##/$kernel/" ${WORKDIR}/runqemu.in >runqemu
         chmod +x runqemu
-        echo "--transform=s,runqemu,${BINARY_INSTALL_PATH}/runqemu," >>include
+        set -- "$@" "--transform=s,runqemu,${BINARY_INSTALL_PATH}/runqemu,"
         echo runqemu >>include
     fi
 
@@ -715,7 +715,7 @@ do_archive_images () {
     done
     echo '"' >>bblayers.conf.sample
 
-    echo "--transform=s,$PWD/,${CONF_INSTALL_PATH}/," >>include
+    set -- "$@" "--transform=s,$PWD/,${CONF_INSTALL_PATH}/,"
     echo "$PWD/local.conf.sample" >>include
     echo "$PWD/bblayers.conf.sample" >>include
     echo "$PWD/conf-notes.txt" >>include
@@ -723,7 +723,7 @@ do_archive_images () {
     if [ -e "${DEPLOY_DIR_IMAGE}/${RELEASE_IMAGE}-${MACHINE}.qemuboot.conf" ]; then
         cp "${DEPLOY_DIR_IMAGE}/${RELEASE_IMAGE}-${MACHINE}.qemuboot.conf" ${WORKDIR}/qemuboot.conf
         sed -i -e 's,-${MACHINE},,g' ${WORKDIR}/qemuboot.conf
-        echo "--transform=s,${WORKDIR}/qemuboot.conf,${BINARY_INSTALL_PATH}/${RELEASE_IMAGE}.qemuboot.conf," >>include
+        set -- "$@" "--transform=s,${WORKDIR}/qemuboot.conf,${BINARY_INSTALL_PATH}/${RELEASE_IMAGE}.qemuboot.conf,"
         echo "${WORKDIR}/qemuboot.conf" >>include
     fi
 
@@ -734,14 +734,14 @@ do_archive_images () {
             | sort -u >"${WORKDIR}/xlayers.conf"
     fi
     if [ -e "${WORKDIR}/xlayers.conf" ]; then
-        echo "--transform=s,${WORKDIR}/xlayers.conf,${BSPFILES_INSTALL_PATH}/xlayers.conf," >>include
+        set -- "$@" "--transform=s,${WORKDIR}/xlayers.conf,${BSPFILES_INSTALL_PATH}/xlayers.conf,"
         echo "${WORKDIR}/xlayers.conf" >>include
     fi
 
     chmod +x "${WORKDIR}/bmaptool"
-    echo "--transform=s,${WORKDIR}/bmaptool,${BINARY_INSTALL_PATH}/bmaptool," >>include
+    set -- "$@" "--transform=s,${WORKDIR}/bmaptool,${BINARY_INSTALL_PATH}/bmaptool,"
     echo "${WORKDIR}/bmaptool" >>include
-    release_tar --files-from=include -chf ${MACHINE}-${ARCHIVE_RELEASE_VERSION}.tar
+    release_tar "$@" --files-from=include -chf ${MACHINE}-${ARCHIVE_RELEASE_VERSION}.tar
 }
 
 do_prepare_release () {
