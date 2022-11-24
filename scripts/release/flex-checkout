@@ -126,7 +126,7 @@ remove_old_versions () {
 }
 
 sort_manifests () {
-    "$scriptdir/version-sort" \
+    sort -V \
     | tac \
     | sort -s -t- -k3 \
     | if [ $all_versions -eq 0 ]; then remove_old_versions; else cat; fi \
@@ -259,7 +259,7 @@ for manifest;  do
 done | (
     read -r base_manifest
     printf '%s\n' "$base_manifest"
-    "$scriptdir/version-sort"
+    sort -V
 ) | cut -d"$(printf '\t')" -f2 | \
     while read -r manifest; do
         cat "$manifest" | while read -r checkout_path commit remotes; do
