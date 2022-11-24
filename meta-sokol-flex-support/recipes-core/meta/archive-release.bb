@@ -84,7 +84,7 @@ def flex_get_remotes(subdir, d):
 
 # Files for the script artifact
 FILESEXTRAPATHS:append = ":${@':'.join('%s/../scripts/release:%s/../scripts' % (l, l) for l in '${BBPATH}'.split(':'))}"
-FLEX_SCRIPTS_FILES = "flex-checkout version-sort setup-flex setup-workspace setup-ubuntu setup-rh setup-debian"
+FLEX_SCRIPTS_FILES = "flex-checkout setup-flex setup-workspace setup-ubuntu setup-rh setup-debian"
 SRC_URI += "${@' '.join('file://%s' % s for s in d.getVar('FLEX_SCRIPTS_FILES').split())}"
 # }}}1
 
