@@ -327,7 +327,7 @@ python do_archive_layers () {
         else:
             fn = manifestfn
         manifestdata[fn].append('\t'.join([path, head] + ['%s=%s' % (k,v) for k,v in remotes.items()]) + '\n')
-        bb.process.run(['tar', '-cf', '%s.tar' % head, 'git-bundles/%s.bundle' % head], cwd=outdir)
+        bb.process.run(['tar', '-cf', 'bundle-' + '%s.tar' % head, 'git-bundles/%s.bundle' % head], cwd=outdir)
         os.unlink(os.path.join(objdir, '%s.bundle' % head))
 
     os.rmdir(objdir)
