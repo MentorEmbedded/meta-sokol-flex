@@ -31,7 +31,7 @@ def encrypt_root_pw(d):
     prefix = '$6$'
 
     password = d.getVar('ROOT_PASSWORD')
-    if any(password == pattern for pattern in [ 'None', '0', '*' ]):
+    if any(password == pattern for pattern in [ '', '0', '*' ]):
         return ''
 
     salt = base64.b64encode(os.urandom(8))
