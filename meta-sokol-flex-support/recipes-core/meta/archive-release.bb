@@ -84,7 +84,7 @@ def flex_get_remotes(subdir, d):
 
 # Files for the script artifact
 FILESEXTRAPATHS:append = ":${@':'.join('%s/../scripts/release:%s/../scripts' % (l, l) for l in '${BBPATH}'.split(':'))}"
-FLEX_SCRIPTS_FILES = "flex-checkout version-sort setup-flex setup-workspace setup-ubuntu setup-rh setup-debian"
+FLEX_SCRIPTS_FILES = "flex-checkout setup-flex setup-workspace setup-ubuntu setup-rh setup-debian"
 SRC_URI += "${@' '.join('file://%s' % s for s in d.getVar('FLEX_SCRIPTS_FILES').split())}"
 # }}}1
 
@@ -327,7 +327,7 @@ python do_archive_layers () {
         else:
             fn = manifestfn
         manifestdata[fn].append('\t'.join([path, head] + ['%s=%s' % (k,v) for k,v in remotes.items()]) + '\n')
-        bb.process.run(['tar', '-cf', '%s.tar' % head, 'git-bundles/%s.bundle' % head], cwd=outdir)
+        bb.process.run(['tar', '-cf', 'bundle-' + '%s.tar' % head, 'git-bundles/%s.bundle' % head], cwd=outdir)
         os.unlink(os.path.join(objdir, '%s.bundle' % head))
 
     os.rmdir(objdir)
