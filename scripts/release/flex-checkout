@@ -263,9 +263,8 @@ done | (
 ) | cut -d"$(printf '\t')" -f2 | \
     while read -r manifest; do
         cat "$manifest" | while read -r checkout_path commit remotes; do
-            branch="$(basename "${manifest%.manifest}")"
             if [ ! -d "$checkout_path/.git" ]; then
-                git init -b "$branch" "$checkout_path"
+                git init -b main "$checkout_path"
             fi
 
             cd "$checkout_path"
@@ -280,6 +279,7 @@ done | (
                 echo "$commit" >.git/shallow
             fi
 
+            branch="$(basename "${manifest%.manifest}")"
             if ! git rev-parse -q --verify "refs/heads/$branch" >/dev/null; then
                 git update-ref "refs/heads/$branch" "$commit"
             fi
