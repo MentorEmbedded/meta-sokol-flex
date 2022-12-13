@@ -1,3 +1,2 @@
 # Comment out the following to disable virtualization support
 USER_FEATURES += "virtualization"
-EXTRA_IMAGE_FEATURES += "${@bb.utils.contains('DISTRO_FEATURES', 'virtualization', 'virtualization', '', d)}"
