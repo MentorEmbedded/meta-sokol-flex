@@ -50,7 +50,7 @@ verify_machine () {
 set_machine () {
     workspace="$1"
     manifest_name=$(basename "$2")
-    manifest_machine=$(echo "$manifest_name" | cut -d'-' -f3- | cut -d'.' -f1)
+    manifest_machine=$(echo "$manifest_name" | sed -e 's/+snapshot-[0-9.]*//' | cut -d'-' -f4- | cut -d'.' -f1)
     echo "$manifest_machine" > "$workspace/.machine"
 }
 
