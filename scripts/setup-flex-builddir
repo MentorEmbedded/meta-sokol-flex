@@ -318,6 +318,27 @@ setup_builddir () {
         fi
     fi
 
+    if [ -d "$FLEXDIR/pyrex" ]; then
+        if [ -z "$PYREXCONFFILE" ]; then
+            PYREXCONFFILE="$BUILDDIR/conf/pyrex.ini"
+        fi
+        if [ ! -e "$PYREXCONFFILE" ]; then
+            "$FLEXDIR/pyrex/mkconfig" | grep -v '^\[run\]' >"$PYREXCONFFILE"
+            cat >>"$PYREXCONFFILE" <<END
+[run]
+bind =
+    \${env:PYREX_BIND}
+    \${env:HOME}/.ssh,readonly
+    \${env:HOME}/.netrc,optional,readonly
+    \${env:HOME}/.gitconfig,optional,readonly
+    \${env:HOME}/.config/git,optional,readonly
+END
+
+            echo "You had no pyrex.ini file. This configuration file has therefore been"
+            echo "created for you with some default values."
+        fi
+    fi
+
     if [ -d "$FLEXDIR/bitbake" ]; then
         BITBAKEDIR="$FLEXDIR/bitbake"
     else
