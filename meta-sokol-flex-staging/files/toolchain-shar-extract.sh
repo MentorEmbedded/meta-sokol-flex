@@ -69,7 +69,8 @@ savescripts=0
 verbose=0
 publish=0
 listcontents=0
-while getopts ":yd:npDRSl" OPT; do
+showversion=0
+while getopts ":yd:npDRSlv" OPT; do
 	case $OPT in
 	y)
 		answer="Y"
@@ -97,6 +98,9 @@ while getopts ":yd:npDRSl" OPT; do
 	l)
 		listcontents=1
 		;;
+	v)
+		showversion=1
+		;;
 	*)
 		echo "Usage: $(basename $0) [-y] [-d <dir>]"
 		echo "  -y         Automatic yes to all prompts"
@@ -109,10 +113,16 @@ while getopts ":yd:npDRSl" OPT; do
 		echo "  -R         Do not relocate executables"
 		echo "  -D         use set -x to see what is going on"
 		echo "  -l         list files that will be extracted"
+		echo "  -v         Display version"
 		exit 1
 		;;
 	esac
 done
+
+if [ "$showversion" -eq 1 ]; then
+	echo "@SDK_VERSION@"
+	exit
+fi
 
 payload_offset=$(($(grep -na -m1 "^MARKER:$" $0|cut -d':' -f1) + 1))
 if [ "$listcontents" = "1" ] ; then
