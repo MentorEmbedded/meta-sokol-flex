@@ -73,9 +73,6 @@ SSTATE_DIR ?= "${FLEXDIR}/cached-binaries"
 #    file:///some/local/dir \
 #"
 
-# Uncomment to build a Yocto SDK for Windows rather than Linux
-#SDKMACHINE = "x86_64-mingw32"
-
 # By default, include a toolchain the SDK, but not host tools like autoconf
 TOOLCHAIN_HOST_REMOVE ??= "nativesdk-packagegroup-sdk-host"
 TOOLCHAIN_HOST_TASK:remove = "${TOOLCHAIN_HOST_REMOVE}"
