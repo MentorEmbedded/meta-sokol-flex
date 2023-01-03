@@ -9,7 +9,6 @@ elif [ -n "$ZSH_NAME" ]; then
 else
     BUILDDIR="$(pwd -P)"
 fi
-export TEMPLATECONF="@TEMPLATECONF@"
 OEINIT="$(find "@OEROOT@" -maxdepth 1 -name \*-init-build-env | head -n 1)"
 if [ -z "$OEINIT" ]; then
     echo >&2 "oe-init-build-env not found in @OEROOT@"
@@ -17,7 +16,7 @@ if [ -z "$OEINIT" ]; then
 else
     . "$OEINIT" "$BUILDDIR" "@BITBAKEDIR@"
     export BB_ENV_PASSTHROUGH_ADDITIONS="$BB_ENV_PASSTHROUGH_ADDITIONS GIT_SSL_CAINFO SALT_LICENSE_SERVER"
-    unset TEMPLATECONF OEINIT
+    unset OEINIT
     cd "$BUILDDIR"
     command -v bitbake >/dev/null 2>&1
 fi
