@@ -50,7 +50,7 @@ verify_machine () {
 set_machine () {
     workspace="$1"
     manifest_name=$(basename "$2")
-    manifest_machine=$(echo "$manifest_name" | cut -d'-' -f3- | cut -d'.' -f1)
+    manifest_machine=$(echo "$manifest_name" | sed -e 's/+snapshot-[0-9.]*//' | cut -d'-' -f4- | cut -d'.' -f1)
     echo "$manifest_machine" > "$workspace/.machine"
 }
 
@@ -126,7 +126,7 @@ remove_old_versions () {
 }
 
 sort_manifests () {
-    "$scriptdir/version-sort" \
+    sort -V \
     | tac \
     | sort -s -t- -k3 \
     | if [ $all_versions -eq 0 ]; then remove_old_versions; else cat; fi \
@@ -259,12 +259,12 @@ for manifest;  do
 done | (
     read -r base_manifest
     printf '%s\n' "$base_manifest"
-    "$scriptdir/version-sort"
+    sort -V
 ) | cut -d"$(printf '\t')" -f2 | \
     while read -r manifest; do
         cat "$manifest" | while read -r checkout_path commit remotes; do
             if [ ! -d "$checkout_path/.git" ]; then
-                git init "$checkout_path"
+                git init -b main "$checkout_path"
             fi
 
             cd "$checkout_path"
@@ -273,6 +273,18 @@ done | (
             fi
             if [ -e "$installdir/git-bundles/$commit.bundle" ]; then
                 git bundle unbundle "$installdir/git-bundles/$commit.bundle" >/dev/null
+            fi
+
+            if [ -z "$remotes" ]; then
+                echo "$commit" >.git/shallow
+            fi
+
+            branch="$(basename "${manifest%.manifest}")"
+            if ! git rev-parse -q --verify "refs/heads/$branch" >/dev/null; then
+                git update-ref "refs/heads/$branch" "$commit"
+            fi
+            if [ "$(git rev-parse -q --verify --symbolic-full-name HEAD 2>/dev/null)" != "refs/heads/$branch" ]; then
+                git checkout "$branch"
             fi
 
             echo "$remotes" | tr '\t' '\n' | while IFS== read -r name url; do
@@ -285,9 +297,6 @@ done | (
                 fi
             done
 
-            if [ -z "$remotes" ]; then
-                echo "$commit" >.git/shallow
-            fi
             # Create branches for all manifests, for reference
             manifestdir="$(dirname "$manifest")"
             for otherfn in "$manifestdir/"*.manifest; do
@@ -306,14 +315,6 @@ done | (
                     fi
                 done <"$otherfn"
             done
-
-            branch="$(basename "${manifest%.manifest}")"
-            if ! git rev-parse -q --verify "refs/heads/$branch" >/dev/null; then
-                git update-ref "refs/heads/$branch" "$commit"
-            fi
-            if [ "$(git rev-parse -q --verify --symbolic-full-name HEAD 2>/dev/null)" != "refs/heads/$branch" ]; then
-                git checkout "$branch"
-            fi
 
             cd - >/dev/null
         done

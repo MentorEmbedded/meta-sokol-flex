@@ -5,7 +5,14 @@
 # ---------------------------------------------------------------------------------------------------------------------
 
 target_sdk_dir="$(cd "$(dirname "$0")" && pwd -P)"
-default_sdk_dir="@SDKPATH@"
+if [ -e "$target_sdk_dir/.relocated" ]; then
+    default_sdk_dir="$(cat "$target_sdk_dir/.relocated")"
+else
+    default_sdk_dir="@SDKPATH@"
+fi
+if [ "$default_sdk_dir" = "$target_sdk_dir" ]; then
+    exit 0
+fi
 
 # fix environment paths
 for env_setup_script in $target_sdk_dir/environment-setup-*; do
@@ -22,18 +29,6 @@ fi
 
 scriptdir="$target_sdk_dir" eval "$(grep 'OECORE_NATIVE_SYSROOT=' "$env_setup_script" | head -n 1)"
 native_sysroot="$OECORE_NATIVE_SYSROOT"
-
-# replace $default_sdk_dir with the new prefix in all text files: configs/scripts/etc.
-# replace the host perl with SDK perl.
-for replace in "$target_sdk_dir -maxdepth 1" "$native_sysroot"; do
-    find $replace -type f 2>/dev/null
-done | xargs -n100 file | grep ":.*\(ASCII\|script\|source\).*text" | \
-    awk -F':' '{printf "\"%s\"\n", $1}' | \
-    grep -Ev "$target_sdk_dir/(environment-setup-*|relocate_sdk*|${0##*/})" | \
-    xargs -n100 sed -i \
-    -e "s:$default_sdk_dir:$target_sdk_dir:g" \
-    -e "s:^#! */usr/bin/perl.*:#! /usr/bin/env perl:g" \
-    -e "s: /usr/bin/perl: /usr/bin/env perl:g"
 
 if [ -e "$native_sysroot/lib" ]; then
     for py in python python2 python3; do
@@ -72,6 +67,18 @@ if [ -e "$native_sysroot/lib" ]; then
     done
 fi
 
+# replace $default_sdk_dir with the new prefix in all text files: configs/scripts/etc.
+# replace the host perl with SDK perl.
+for replace in "$target_sdk_dir -maxdepth 1" "$native_sysroot"; do
+    find $replace -type f 2>/dev/null
+done | xargs -n100 file | grep ":.*\(ASCII\|script\|source\).*text" | \
+    awk -F':' '{printf "\"%s\"\n", $1}' | \
+    grep -Ev "$target_sdk_dir/(environment-setup-*|relocate_sdk\\.sh|${0##*/})" | \
+    xargs -n100 sed -i \
+    -e "s:$default_sdk_dir:$target_sdk_dir:g" \
+    -e "s:^#! */usr/bin/perl.*:#! /usr/bin/env perl:g" \
+    -e "s: /usr/bin/perl: /usr/bin/env perl:g"
+
 # Execute post-relocation script
 post_relocate="$target_sdk_dir/post-relocate-setup.sh"
 if [ -e "$post_relocate" ]; then
@@ -82,4 +89,8 @@ if [ -e "$post_relocate" ]; then
         exit 1
     fi
     rm -f $post_relocate
+fi
+
+if [ -w "$target_sdk_dir" ]; then
+    echo "$target_sdk_dir" >"$target_sdk_dir/.relocated"
 fi
