@@ -331,8 +331,7 @@ setup_builddir () {
 
     cat "$scriptsdir/build-setup-environment.in" \
         | sed -e "s#@OEROOT@#$OEROOT#g" \
-              -e "s#@BITBAKEDIR@#$BITBAKEDIR#g" \
-              -e "s#@TEMPLATECONF@#$TEMPLATECONF#g" >"$BUILDDIR/setup-environment"
+              -e "s#@BITBAKEDIR@#$BITBAKEDIR#g" >"$BUILDDIR/setup-environment"
 }
 
 scriptsdir="$(cd $(dirname $0) && pwd)"
