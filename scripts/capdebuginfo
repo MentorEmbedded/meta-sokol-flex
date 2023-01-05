@@ -174,8 +174,8 @@ get_flexinstallinfo () {
    local __outputdir="${1}"
    local __output="${1}/host/${2}"
    
-   if [ -d "${HOMEDIR}"/.mentor ]; then
-      cp -a "${HOMEDIR}"/.mentor/.registry "${__outputdir}"/host/mentor-registry
+   if [ -d "${HOMEDIR}"/.siemens ]; then
+      cp -a "${HOMEDIR}"/.siemens/.registry "${__outputdir}"/host/siemens-registry
    else
       echo -en "\\nNo Sokol Flex OS install info found!\\n" >> ${__output}
    fi
