@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-PREMIRRORS:append = " \
+PREMIRRORS:append:sokol-flex = " \
 git://sources.redhat.com/ git://sourceware.org/ \n\
 "
 
-MIRRORS += "\
+MIRRORS:append:sokol-flex = "\
 ${KERNELORG_MIRROR}/ https://kernel.googlesource.com/ \n\
 ${KERNELORG_MIRROR}/ http://mirror.nexcess.net/kernel.org/ \n\
 ${KERNELORG_MIRROR}/ http://mirror.gbxs.net/pub/ \n\

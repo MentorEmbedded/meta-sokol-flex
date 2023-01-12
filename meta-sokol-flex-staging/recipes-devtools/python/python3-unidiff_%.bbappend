@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
+FILESEXTRAPATHS:prepend:feature-sokol-flex-staging := "${THISDIR}/${PN}:"
 
 # Fix for https://github.com/matiasb/python-unidiff/pull/97
-SRC_URI += "file://97.patch"
+SRC_URI:append:feature-sokol-flex-staging = " file://97.patch"

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-FILESEXTRAPATHS:prepend := "${THISDIR}:"
+FILESEXTRAPATHS:prepend:sokol-flex := "${THISDIR}:"
 
 SRC_URI:append:sokol-flex = " ${@bb.utils.contains('DISTRO_FEATURES', 'systemd', '\
                    file://psplash-quit.service \

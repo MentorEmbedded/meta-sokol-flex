@@ -2,4 +2,4 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-RDEPENDS:${PN} += "${PYTHON_PN}-distutils"
+RDEPENDS:${PN}:append:feature-sokol-flex-staging = " ${PYTHON_PN}-distutils"
