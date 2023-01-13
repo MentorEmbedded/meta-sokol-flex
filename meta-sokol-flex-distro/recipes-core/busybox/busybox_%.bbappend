@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-FILESEXTRAPATHS:prepend := "${THISDIR}/busybox:"
+FILESEXTRAPATHS:prepend:sokol-flex := "${THISDIR}/busybox:"
 
 # fancy-head.cfg is enabled so we have head -c, which we need for our tracing
 # scripts with lttng

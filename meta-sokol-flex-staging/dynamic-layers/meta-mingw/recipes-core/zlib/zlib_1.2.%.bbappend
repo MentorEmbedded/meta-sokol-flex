@@ -1,4 +1,4 @@
-EXTRA_OEMAKE:append:mingw32 = "\
+EXTRA_OEMAKE:append:mingw32:feature-sokol-flex-staging = "\
     -fwin32/Makefile.gcc \
     SHARED_MODE=1 \
     \
@@ -20,10 +20,10 @@ EXTRA_OEMAKE:append:mingw32 = "\
     'INSTALL=install' \
 "
 
-do_configure:mingw32 () {
+do_configure:mingw32:feature-sokol-flex-staging () {
     :
 }
 
-do_compile:mingw32 () {
+do_compile:mingw32:feature-sokol-flex-staging () {
 	oe_runmake libz.a zlib1.dll libz.dll.a minigzip.exe minigzip_d.exe
 }

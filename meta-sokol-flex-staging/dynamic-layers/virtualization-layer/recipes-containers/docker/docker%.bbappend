@@ -4,4 +4,4 @@
 export GO_LINKSHARED
 
 # Override 0001-libnetwork-use-GO-instead-of-go.patch
-FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
+FILESEXTRAPATHS:prepend:feature-sokol-flex-staging := "${THISDIR}/files:"

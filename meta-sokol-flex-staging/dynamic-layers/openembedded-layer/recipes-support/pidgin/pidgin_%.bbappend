@@ -2,4 +2,4 @@
 # SPDX-License-Identifier: GPL-2.0
 # ---------------------------------------------------------------------------------------------------------------------
 
-RDEPENDS:finch += "python3-core"
+RDEPENDS:finch:append:feature-sokol-flex-staging = " python3-core"
