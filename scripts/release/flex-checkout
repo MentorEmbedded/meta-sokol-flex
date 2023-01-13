@@ -36,8 +36,7 @@ evalf () {
 
 verify_machine () {
     workspace="$1"
-    manifest_name=$(basename "$2")
-    manifest_machine=$(echo "$manifest_name" | cut -d'-' -f3- | cut -d'.' -f1)
+    manifest_machine="$2"
     workspace_machine=$(cat "$workspace/.machine")
     if [ "$workspace_machine" != "$manifest_machine" ]; then
         echo >&2 "Error: workspace in $workspace is already setup for $workspace_machine."
@@ -45,13 +44,6 @@ verify_machine () {
         echo >&2 "or clean up $workspace before continuing."
         exit 1
     fi
-}
-
-set_machine () {
-    workspace="$1"
-    manifest_name=$(basename "$2")
-    manifest_machine=$(echo "$manifest_name" | sed -e 's/+snapshot-[0-9.]*//' | cut -d'-' -f4- | cut -d'.' -f1)
-    echo "$manifest_machine" > "$workspace/.machine"
 }
 
 prompt_choice () {
@@ -205,18 +197,22 @@ if [ -z "$1" ]; then
             exit 1
         fi
     fi
-    if [ -e "$project/.machine" ]; then
-        verify_machine "$project" "$(cat "$project/.manifest" | head -n1)"
-    fi
-    set -- $(cat "$project/.manifest")
+    set -- "$(cat "$project/.manifest")"
     manifest="$1"
 else
-    if [ -e "$project/.machine" ]; then
-        verify_machine "$project" "$manifest"
-    fi
     echo "$manifest" >"$project/.manifest"
 fi
-set_machine "$project" "$manifest"
+
+infofn="${manifest%.manifest}.info"
+
+manifest_machine="$(sed -n -e 's/^machine = //p' "$infofn")"
+if [ -z "$manifest_machine" ]; then
+    manifest_machine=$(basename "$manifest" | cut -d'-' -f3- | cut -d'.' -f1)
+fi
+if [ -e "$project/.machine" ]; then
+    verify_machine "$project" "$manifest_machine"
+fi
+echo "$manifest_machine" >"$project/.machine"
 
 if [ $no_extra_manifests -eq 1 ]; then
     set -- "$1"
@@ -238,18 +234,15 @@ elif [ $# -lt 2 ]; then
     done
 fi
 
-infofn="${manifest%.manifest}.info"
-if [ -e "$infofn" ]; then
-    bspfiles_path="$(sed -n -e 's/^bspfiles_path = //p' "$infofn")"
-    if [ -n "$bspfiles_path" ] && [ -e "$installdir/$bspfiles_path" ]; then
-        rm -f "${bspfiles_path%/*}"
-        ln -s "$installdir/$bspfiles_path" "${bspfiles_path%/*}"
-        for i in xlayers.conf customer.conf; do
-            if [ -e "$installdir/$bspfiles_path/$i" ]; then
-                ln -s "$installdir/$bspfiles_path/$i" .
-            fi
-        done
-    fi
+bspfiles_path="$(sed -n -e 's/^bspfiles_path = //p' "$infofn")"
+if [ -n "$bspfiles_path" ] && [ -e "$installdir/$bspfiles_path" ]; then
+    rm -f "${bspfiles_path%/*}"
+    ln -s "$installdir/$bspfiles_path" "${bspfiles_path%/*}"
+    for i in xlayers.conf customer.conf; do
+        if [ -e "$installdir/$bspfiles_path/$i" ]; then
+            ln -s "$installdir/$bspfiles_path/$i" .
+        fi
+    done
 fi
 
 mkdir -p downloads
