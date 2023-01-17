@@ -335,7 +335,10 @@ python do_archive_layers () {
     infofn = d.expand('%s/${MANIFEST_NAME}.info' % mandir)
     with open(infofn, 'w') as infofile:
         c = configparser.ConfigParser()
-        c['DEFAULT'] = {'bspfiles_path': d.getVar('BSPFILES_INSTALL_PATH')}
+        c['DEFAULT'] = {
+            'bspfiles_path': d.getVar('BSPFILES_INSTALL_PATH'),
+            'machine': d.getVar('MACHINE'),
+        }
         c.write(infofile)
 
     for fn, lines in manifestdata.items():
