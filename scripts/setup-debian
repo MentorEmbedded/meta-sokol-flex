@@ -37,6 +37,8 @@ set -- \
     python3-distutils \
     rsync \
     wget \
+    lz4 \
+    zstd \
     ssh
 
 # This is helpful to write images, and is in our documentation
