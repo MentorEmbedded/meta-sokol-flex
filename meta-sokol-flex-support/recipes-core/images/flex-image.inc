@@ -11,7 +11,7 @@ IMAGE_INSTALL:append:sokol-flex = " libgcc"
 
 LICENSE = "MIT"
 
-inherit core-image
+inherit core-image image-buildinfo
 
 IMAGE_FEATURES:append:sokol-flex = " ${@bb.utils.contains('COMBINED_FEATURES', 'alsa', ' tools-audio', '', d)}"
 IMAGE_INSTALL:append:sokol-flex = " util-linux-mkfs connman"
