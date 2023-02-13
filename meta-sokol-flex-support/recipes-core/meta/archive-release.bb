@@ -742,6 +742,7 @@ do_archive_images () {
     fi
 
     chmod +x "${WORKDIR}/bmaptool"
+    sed -i 's~#!/usr/bin/env python$~#!/usr/bin/env python3~g' "${WORKDIR}/bmaptool"
     set -- "$@" "--transform=s,${WORKDIR}/bmaptool,${BINARY_INSTALL_PATH}/bmaptool,"
     echo "${WORKDIR}/bmaptool" >>include
     release_tar "$@" --files-from=include -chf ${MACHINE}-${ARCHIVE_RELEASE_VERSION}.tar
