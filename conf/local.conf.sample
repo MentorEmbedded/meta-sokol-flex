@@ -25,7 +25,7 @@ EXTRA_IMAGE_FEATURES ?= "multilib-runtime"
 
 # Image features for development-image
 IMAGE_FEATURES_DEVELOPMENT ?= "debug-tweaks"
-IMAGE_FEATURES_DEVELOPMENT:append:feature-flex-bsp = " codebench-debug ssh-server-openssh"
+IMAGE_FEATURES_DEVELOPMENT:append:flex-bsp = " codebench-debug ssh-server-openssh"
 EXTRA_IMAGE_FEATURES = "${IMAGE_FEATURES_DEVELOPMENT} multilib-runtime splash"
 
 # Image features for production-image
