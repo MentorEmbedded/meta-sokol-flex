@@ -335,8 +335,8 @@ setup_builddir () {
               -e "s#@TEMPLATECONF@#$TEMPLATECONF#g" >"$BUILDDIR/setup-environment"
 }
 
-scriptsdir="$(cd $(dirname $0) && pwd)"
-scriptsdir="$(abspath $scriptsdir)"
+scriptsdir="$(cd "$(dirname "$0")" && pwd)"
+scriptsdir="$(abspath "$scriptsdir")"
 layerdir="${scriptsdir%/*}"
 
 tmpdir="$(mktemp -d -t "${0##*/}.XXXXX")" || exit 1
