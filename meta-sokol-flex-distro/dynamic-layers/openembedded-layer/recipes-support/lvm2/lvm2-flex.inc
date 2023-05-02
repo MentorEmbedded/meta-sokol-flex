@@ -1,4 +1,4 @@
-FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
+FILESEXTRAPATHS:prepend := "${THISDIR}/lvm2:"
 
 SRC_URI:append = " file://lvm2-flex.service"
 
