@@ -3,6 +3,6 @@
 # ---------------------------------------------------------------------------------------------------------------------
 
 FLEX_LVM_PKG = ""
-FLEX_LVM_PKG:sokol-flex = "recipes-support/lvm2/lvm2-flex.inc"
+FLEX_LVM_PKG:sokol-flex = "lvm2-flex.inc"
 
 include ${FLEX_LVM_PKG}
