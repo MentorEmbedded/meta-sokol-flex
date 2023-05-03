@@ -5,6 +5,3 @@ Common targets are:
 
 production-image requires that the ROOT_PASSWORD variable be set. See
 conf/local.conf for details.
-
-For qemu machines, you can also run the generated qemu images with a command
-like 'runqemu qemux86'.
