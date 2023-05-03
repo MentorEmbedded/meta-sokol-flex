@@ -5,4 +5,4 @@
 FLEX_LVM_PKG = ""
 FLEX_LVM_PKG:sokol-flex = "lvm2-flex.inc"
 
-include ${FLEX_LVM_PKG}
+require ${FLEX_LVM_PKG}
