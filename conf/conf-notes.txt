@@ -1,4 +1,5 @@
-Common targets are:
+
+Common bitbake targets are:
 
     development-image
     production-image
