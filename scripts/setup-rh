@@ -10,6 +10,7 @@
 # kind, whether express or implied.
 
 packages="python38 \
+          python38-setuptools \
           patch diffstat git bzip2 tar \
           gzip gawk chrpath wget cpio perl file which \
           make gcc gcc-c++ rsync rpcgen \
