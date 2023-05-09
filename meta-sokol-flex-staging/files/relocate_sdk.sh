@@ -43,7 +43,7 @@ if [ -e "$native_sysroot/lib" ]; then
         exit 1
     fi
 
-    dl_path=$(find $native_sysroot/lib -name "ld-linux*")
+    dl_path=$(find $native_sysroot/lib -mindepth 1 -maxdepth 1 -name "ld-linux*" | head -n 1)
     if [ "$dl_path" = "" ] ; then
             echo "SDK could not be set up. Relocate script unable to find ld-linux.so. Abort!"
             exit 1
