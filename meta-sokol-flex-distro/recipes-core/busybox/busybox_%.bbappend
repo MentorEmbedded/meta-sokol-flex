@@ -11,4 +11,5 @@ SRC_URI:append:sokol-flex = "\
     file://fancy-head.cfg \
 	file://pidof.cfg \
 	file://top.cfg \
+    file://base64.cfg \
 "
