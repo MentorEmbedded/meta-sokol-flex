@@ -14,7 +14,7 @@ SRC_URI:append:sokol-flex = " ${@bb.utils.contains('DISTRO_FEATURES', 'systemd',
 SRC_URI:append:sokol-flex = " file://0001-psplash-config-enable-fullscreen-image.patch \
 		  file://0001-plash-colors.h-color-change.patch \
 		 "
-EXTRA_OECONF:append:sokol-flex = " --disable-progress-bar"
+EXTRA_OECONF:append:sokol-flex = " --disable-progress-bar --disable-startup-msg"
 
 # # Update to latest version of psplash
 # SRCREV:sokol-flex = "5b3c1cc28f5abdc2c33830150b48b278cc4f7bca"
