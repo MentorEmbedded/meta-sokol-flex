@@ -9,6 +9,7 @@ elif [ -n "$ZSH_NAME" ]; then
 else
     BUILDDIR="$(pwd -P)"
 fi
+export LC_CTYPE="en_US.UTF-8"
 export TEMPLATECONF="@TEMPLATECONF@"
 OEINIT="$(find "@OEROOT@" -maxdepth 1 -name \*-init-build-env | head -n 1)"
 if [ -z "$OEINIT" ]; then
