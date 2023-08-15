@@ -38,10 +38,10 @@ else
     fi
 
     for i in $(seq $#); do
-        setup_flex_arg="$(eval printf "%s" "\$$i")"
+        setup_flex_arg="$(eval printf "%s" "\${$i}")"
         case "$setup_flex_arg" in
             -b)
-                BUILDDIR="$(eval printf "%s" "\$$((i + 1))")"
+                BUILDDIR="$(eval printf "%s" "\${$((i + 1))}")"
                 if [ -z "$BUILDDIR" ]; then
                     echo >&2 "-b requires an argument"
                 fi
@@ -60,7 +60,7 @@ else
             fi
         done
 
-        OPTIONALLAYERS="${OPTIONALLAYERS-flex-private tracing-layer}"
+        OPTIONALLAYERS="${OPTIONALLAYERS-flex-private}"
         # Customer directory layers handling (e.g. <customername>-custom)
         for layercheck in . $layerdir/..; do
             if [ -e "$layercheck/customer.conf" ]; then
@@ -120,13 +120,14 @@ else
             ) >>conf/local.conf
         }
 
-        if [ -e $layerdir/post-setup-environment ]; then
-            . $layerdir/post-setup-environment
-        fi
-
         if [ -e "$BUILDDIR/conf/local.conf" ] && [ -e "$BUILDDIR/conf/bblayers.conf" ]; then
             sed -i -n -e ":out; /^## Begin /{ :loop; /^## End /{ d; b out; }; n; b loop; }; p;" conf/local.conf
             SETUP_ENV_MACHINE="$(sed -n -e 's/^MACHINE *?*= *"\(.*\)"/\1/p' "$BUILDDIR/conf/local.conf")"
+
+            if [ -e "$layerdir/post-setup-environment" ]; then
+                layer="$layerdir"
+                . "$layerdir/post-setup-environment"
+            fi
 
             load_lconf_snippet "$layerdir" "conf/local.conf.append"
             load_lconf_snippet "$layerdir" "conf/local.conf.append.$SETUP_ENV_MACHINE"

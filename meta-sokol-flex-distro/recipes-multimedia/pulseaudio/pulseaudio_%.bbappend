@@ -13,4 +13,5 @@ RDEPENDS:pulseaudio-server:append:sokol-flex = "\
     pulseaudio-module-cli \
     pulseaudio-module-dbus-protocol \
     pulseaudio-module-echo-cancel \
+    pulseaudio-module-switch-on-connect \
 "

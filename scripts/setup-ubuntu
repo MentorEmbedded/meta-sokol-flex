@@ -21,16 +21,13 @@ else
     SUDO=
 fi
 
-PKGS="$PKGS ubuntu-minimal ubuntu-standard make gcc g++ patch diffstat texinfo texi2html cvs subversion bzip2 tar gzip gawk chrpath libncurses5-dev git-core lsb-release python3 xvfb x11-utils rsync zstd liblz4-tool"
+PKGS="$PKGS ubuntu-minimal ubuntu-standard make gcc g++ patch diffstat texinfo texi2html cvs subversion bzip2 tar gzip gawk chrpath libncurses5-dev git-core lsb-release python3 python3-setuptools xvfb x11-utils rsync zstd liblz4-tool"
 
 # These are needed for the qemu-native build
 PKGS="$PKGS libgl1-mesa-dev libglu1-mesa-dev libsdl1.2-dev"
 
 # This is helpful to write images, and is in our documentation
 PKGS="$PKGS bmap-tools"
-
-# This is needed for Windows ADE
-PKGS="$PKGS zip"
 
 echo "Installing packages required to build Sokol Flex OS"
 $SUDO apt-get update

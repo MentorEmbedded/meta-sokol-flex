@@ -34,9 +34,12 @@ set -- \
     make \
     patch \
     python3 \
+    python3-setuptools \
     python3-distutils \
     rsync \
     wget \
+    lz4 \
+    zstd \
     ssh
 
 # This is helpful to write images, and is in our documentation

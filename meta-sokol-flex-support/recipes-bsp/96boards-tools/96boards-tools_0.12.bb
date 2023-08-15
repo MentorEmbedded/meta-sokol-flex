@@ -9,7 +9,7 @@ SECTION = "devel"
 LICENSE = "GPL-2.0-or-later"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/GPL-2.0-or-later;md5=fed54355545ffd980b814dab4a3b312c"
 
-SRCREV = "a999d655417bb19ce8a476ff8c811e957748b661"
+SRCREV = "52ad42bb74ba4b3fcece2483f0d496494d60715f"
 SRC_URI = "git://github.com/96boards/96boards-tools;branch=master;protocol=https\
            file://resize-helper.sh.in"
 
