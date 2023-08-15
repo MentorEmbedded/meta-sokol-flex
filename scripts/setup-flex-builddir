@@ -292,10 +292,6 @@ setup_builddir () {
         fi
     fi
 
-    if [ ! -f "$BUILDDIR/conf/templateconf.cfg" ]; then
-        echo "$TEMPLATECONF" >"$BUILDDIR/conf/templateconf.cfg"
-    fi
-
     if [ ! -e $BUILDDIR/conf/local.conf ]; then
         cp $TEMPLATECONF/local.conf.sample $BUILDDIR/conf/local.conf
         echo "You had no local.conf file. This configuration file has therefore been"
@@ -331,8 +327,7 @@ setup_builddir () {
 
     cat "$scriptsdir/build-setup-environment.in" \
         | sed -e "s#@OEROOT@#$OEROOT#g" \
-              -e "s#@BITBAKEDIR@#$BITBAKEDIR#g" \
-              -e "s#@TEMPLATECONF@#$TEMPLATECONF#g" >"$BUILDDIR/setup-environment"
+              -e "s#@BITBAKEDIR@#$BITBAKEDIR#g" >"$BUILDDIR/setup-environment"
 }
 
 scriptsdir="$(cd "$(dirname "$0")" && pwd)"
