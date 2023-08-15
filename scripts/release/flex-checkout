@@ -189,7 +189,7 @@ done
 
 manifest="$1"
 if [ -z "$1" ]; then
-    if ! [ -e "$project/.manifest" ]; then
+    if ! [ -s "$project/.manifest" ]; then
         prompt_manifest "$installdir/manifests" "Select manifest" >"$project/.manifest"
         if ! [ -s "$project/.manifest" ]; then
             echo >&2 "Error: no manifest found, please specify"
