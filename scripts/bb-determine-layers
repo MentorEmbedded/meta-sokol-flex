@@ -218,7 +218,7 @@ class Layer(object):
         data.setVar('LAYERDIR', layer_path)
         initial_collections = set((data.getVar('BBFILE_COLLECTIONS', True) or '').split())
         try:
-            data = bb.parse.handle(lconf, data, include=True)
+            data = bb.parse.handle(lconf, data, include=True, baseconfig=True)
         except BaseException as exc:
             raise LayerError(exc)
 
