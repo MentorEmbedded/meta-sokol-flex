@@ -4,7 +4,7 @@ Date: Thu, 13 Oct 2016 17:06:31 +0530
 Subject: [PATCH] psplash-config: enable fullscreen image
 
 Signed-off-by: Srikanth Krishnakar <Srikanth_Krishnakar@mentor.com>
-
+Upstream-Status: Inappropriate [configuration]
 ---
  psplash-config.h | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
