@@ -8,4 +8,6 @@ python set_multilib_variants () {
     if variants:
         d.setVar('MULTILIB_VARIANTS', variants)
 }
-do_generate_content[prefuncs] += "set_multilib_variants"
+SET_MULTILIB_VARIANTS = ""
+SET_MULTILIB_VARIANTS:sokol-flex = "set_multilib_variants"
+do_generate_content[prefuncs] += "${SET_MULTILIB_VARIANTS}"

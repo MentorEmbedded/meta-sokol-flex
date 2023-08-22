@@ -11,6 +11,8 @@
 # user will have no way to login.
 
 ROOT_PASSWORD ?= ""
+ROOT_PASSWORD_HASH_ROUNDS ?= "10000"
+
 IMAGE_INCOMPATIBLE_ZAPPED_MESSAGE = "ROOT_PASSWORD has not been set, and this \
 image has neither debug-tweaks nor empty-root-password set. This will result \
 in an image whose root login is disabled. Please set ROOT_PASSWORD to the root \
@@ -20,13 +22,30 @@ allow root login with an empty password."
 EMPTY_ROOT_PASSWORD = "${@'empty-root-password' if d.getVar('ROOT_PASSWORD', True) == '0' else ''}"
 IMAGE_FEATURES += "${EMPTY_ROOT_PASSWORD}"
 
-inherit extrausers
+def encrypt_root_pw(d):
+    import os
+    import crypt
+    import base64
+    import shlex
 
-# This variable indirection allows for the possibility of programmatically
-# generating the root password, if so desired, without mucking up bitbake's
-# variable checksums.
-ACTUAL_ROOT_PASSWORD = "${ROOT_PASSWORD}"
-EXTRA_USERS_PARAMS:prepend = "${@'usermod -P \'${ACTUAL_ROOT_PASSWORD}\' root;' if d.getVar('ACTUAL_ROOT_PASSWORD') not in ['', '0', '*'] else ''}"
+    prefix = '$6$'
+
+    password = d.getVar('ROOT_PASSWORD')
+    if any(password == pattern for pattern in [ '', '0', '*' ]):
+        return ''
+
+    salt = base64.b64encode(os.urandom(8))
+
+    rounds = d.getVar('ROOT_PASSWORD_HASH_ROUNDS')
+    if rounds is not None:
+        rounds = max(1000, min(999999999, int(rounds) or 10000))
+        prefix += 'rounds={0}$'.format(rounds)
+
+    return shlex.quote(crypt.crypt(password, prefix + salt.decode('UTF-8')).replace('$','\$'))
+
+inherit extrausers
+ACTUAL_ROOT_PASSWORD = '${@encrypt_root_pw(d)}'
+EXTRA_USERS_PARAMS:prepend = "${@'usermod -p %s root;' % d.getVar('ACTUAL_ROOT_PASSWORD') if d.getVar('ACTUAL_ROOT_PASSWORD') != '' else ''}"
 
 # Change the default behavior when the root password is empty. If the image
 # lacks empty-root-password and debug-tweaks, rather than defaulting to

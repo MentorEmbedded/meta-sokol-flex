@@ -1,0 +1,2 @@
+# Comment out the following to disable virtualization support
+USER_FEATURES += "virtualization"

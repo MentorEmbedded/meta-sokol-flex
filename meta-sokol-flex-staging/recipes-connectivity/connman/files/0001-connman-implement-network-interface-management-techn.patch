@@ -8,7 +8,7 @@ tries to call cleanup_devices function, this will let connman
 create new routing table without bringing down the ethernet interface.
 
 Signed-off-by: Srikanth Krishnakar <Srikanth_Krishnakar@mentor.com>
-
+Upstream-Status: Pending
 ---
  src/connman.service.in | 5 ++++-
  1 file changed, 4 insertions(+), 1 deletion(-)

@@ -11,8 +11,8 @@ IMAGE_INSTALL:append:sokol-flex = " libgcc"
 
 LICENSE = "MIT"
 
-inherit core-image
+inherit core-image image-buildinfo
 
 IMAGE_FEATURES:append:sokol-flex = " ${@bb.utils.contains('COMBINED_FEATURES', 'alsa', ' tools-audio', '', d)}"
 IMAGE_INSTALL:append:sokol-flex = " util-linux-mkfs connman"
-IMAGE_INSTALL:append:sokol-flex = " ${@bb.utils.contains('BBFILE_COLLECTIONS', 'openembedded-layer', 'haveged' if not any_incompatible(d, ['haveged'], 'GPL-3.0-only') else '', '', d)}"
+IMAGE_INSTALL:append:sokol-flex = " ${@bb.utils.contains_any('IMAGE_FEATURES', ['multimedia', 'graphics'], '${MACHINE_HWCODECS}', '', d)}"

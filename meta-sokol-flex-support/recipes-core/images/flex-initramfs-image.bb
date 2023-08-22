@@ -15,7 +15,7 @@ IMAGE_LINGUAS = ""
 
 LICENSE = "MIT"
 
-IMAGE_FSTYPES = "${INITRAMFS_FSTYPES}"
+IMAGE_FSTYPES:sokol-flex = "${INITRAMFS_FSTYPES}"
 inherit core-image
 
 IMAGE_ROOTFS_SIZE = "8192"
@@ -28,8 +28,6 @@ BAD_RECOMMENDATIONS += "busybox-syslog"
 
 # We don't need selinux labels in initramfs
 IMAGE_PREPROCESS_COMMAND:remove = "selinux_set_labels ;"
-
-COMPATIBLE_HOST:sokol-flex = "(arm|aarch64|i.86|x86_64).*-linux"
 
 # Take care of warnings due to dependency on noexec ${INITRAMFS_IMAGE}:do_image_complete's
 # do_packagedata() in our initramfs image for now. The fix needs to come from oe-core image

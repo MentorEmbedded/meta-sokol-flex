@@ -4,6 +4,7 @@ Date: Thu, 13 Oct 2016 19:48:55 +0530
 Subject: [PATCH] plash-colors.h: color change
 
 Signed-off-by: Srikanth Krishnakar <Srikanth_Krishnakar@mentor.com>
+Upstream-Status: Inappropriate [configuration]
 ---
  psplash-colors.h | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
