@@ -254,50 +254,55 @@ class FlexUtilsPlugin(LayerPlugin):
                 return 1
 
         fetch_recipes = self._collect_fetch_recipes(args.targets, args.task, depgraph)
+        unique_lines = set()
 
-        omode = 'a' if args.append else 'w'
-        with open(filename, omode) as f:
-            for recipe in fetch_recipes:
-                try:
-                    fn = depgraph['pn'][recipe]['filename']
-                except KeyError:
-                    mc = self.tinfoil.config_data.getVar('BBMULTICONFIG')
-                    if not mc:
-                        raise Exception("Could not find key '%s' in depgraph and no multiconfigs defined" % recipe)
-                    for cfg in mc.split():
-                        try:
-                            nkey = f"mc:{cfg}:{recipe}"
-                            fn = depgraph['pn'][nkey]['filename']
-                        except KeyError:
-                            continue
-                if not fn:
-                    raise Exception("Could not find recipe for '%s' in depgraph" % recipe)
+        for recipe in fetch_recipes:
+            try:
+                fn = depgraph['pn'][recipe]['filename']
+            except KeyError:
+                mc = self.tinfoil.config_data.getVar('BBMULTICONFIG')
+                if not mc:
+                    raise Exception("Could not find key '%s' in depgraph and no multiconfigs defined" % recipe)
+                for cfg in mc.split():
+                    try:
+                        nkey = f"mc:{cfg}:{recipe}"
+                        fn = depgraph['pn'][nkey]['filename']
+                    except KeyError:
+                        continue
+            if not fn:
+                raise Exception("Could not find recipe for '%s' in depgraph" % recipe)
 
-                real_fn, cls, mc = bb.cache.virtualfn2realfn(fn)
-                appends = self.tinfoil.get_file_appends(fn)
-                data = self.tinfoil.parse_recipe_file(fn, appendlist=appends)
+            real_fn, cls, mc = bb.cache.virtualfn2realfn(fn)
+            appends = self.tinfoil.get_file_appends(fn)
+            data = self.tinfoil.parse_recipe_file(fn, appendlist=appends)
 
-                pn = data.getVar('PN')
-                pv = data.getVar('PV')
-                lc = data.getVar('LICENSE')
+            pn = data.getVar('PN')
+            pv = data.getVar('PV')
+            lc = data.getVar('LICENSE')
 
-                if not args.sourceinfo:
-                    f.write('%s,%s,%s\n' % (pn, pv, lc))
-                else:
-                    # unset su, otherwise we get previous value if there is no current
-                    su = ''
-                    for url in data.getVar('SRC_URI').split():
-                        scheme, host, path, user, passwd, param = bb.fetch.decodeurl(url)
-                        if scheme != 'file':
-                            su = bb.fetch.encodeurl((scheme, host, path, '', '', ''))
-                    hp = data.getVar('HOMEPAGE')
+            if not args.sourceinfo:
+                unique_lines.add('%s,%s,%s\n' % (pn, pv, lc))
+            else:
+                # unset su, otherwise we get previous value if there is no current
+                su = ''
+                for url in data.getVar('SRC_URI').split():
+                    scheme, host, path, user, passwd, param = bb.fetch.decodeurl(url)
+                    if scheme != 'file':
+                        su = bb.fetch.encodeurl((scheme, host, path, '', '', ''))
+                hp = data.getVar('HOMEPAGE')
 
-                    f.write('%s,%s,%s,%s,%s\n' % (pn, pv, lc, su, hp))
+                unique_lines.add('%s,%s,%s,%s,%s\n' % (pn, pv, lc, su, hp))
 
-        # remove any duplicates added due to append flag
-        uniqlines = set(open(filename).readlines())
+        # if append flag is set then read the existing file first and create a consolidated set
+        if args.append:
+            with open(filename, 'r') as f:
+                lines = f.readlines()
+                unique_lines.update(lines)
+
+        # create a sorted line list from the set
+        sorted_lines = sorted(unique_lines)
         with open(filename, 'w') as f:
-            f.writelines(uniqlines)
+            f.writelines(sorted_lines)
 
     def register_commands(self, sp):
         common = argparse.ArgumentParser(add_help=False)
