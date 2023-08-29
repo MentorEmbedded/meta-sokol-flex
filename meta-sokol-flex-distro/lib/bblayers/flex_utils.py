@@ -276,12 +276,12 @@ class FlexUtilsPlugin(LayerPlugin):
             appends = self.tinfoil.get_file_appends(fn)
             data = self.tinfoil.parse_recipe_file(fn, appendlist=appends)
 
-            pn = data.getVar('PN')
+            bpn = data.getVar('BPN')
             pv = data.getVar('PV')
             lc = data.getVar('LICENSE')
 
             if not args.sourceinfo:
-                unique_lines.add('%s,%s,%s\n' % (pn, pv, lc))
+                unique_lines.add('%s,%s,%s\n' % (bpn, pv, lc))
             else:
                 # unset su, otherwise we get previous value if there is no current
                 su = ''
@@ -291,7 +291,7 @@ class FlexUtilsPlugin(LayerPlugin):
                         su = bb.fetch.encodeurl((scheme, host, path, '', '', ''))
                 hp = data.getVar('HOMEPAGE')
 
-                unique_lines.add('%s,%s,%s,%s,%s\n' % (pn, pv, lc, su, hp))
+                unique_lines.add('%s,%s,%s,%s,%s\n' % (bpn, pv, lc, su, hp))
 
         # if append flag is set then read the existing file first and create a consolidated set
         if args.append:
