@@ -294,7 +294,7 @@ class FlexUtilsPlugin(LayerPlugin):
                 unique_lines.add('%s,%s,%s,%s,%s\n' % (bpn, pv, lc, su, hp))
 
         # if append flag is set then read the existing file first and create a consolidated set
-        if args.append:
+        if args.append and os.path.exists(filename):
             with open(filename, 'r') as f:
                 lines = f.readlines()
                 unique_lines.update(lines)
