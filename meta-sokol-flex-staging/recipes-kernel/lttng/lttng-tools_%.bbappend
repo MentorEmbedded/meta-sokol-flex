@@ -1,5 +1,5 @@
 python () {
-    if not d.getVar('MULTILIBS').strip():
+    if not d.getVar('MULTILIBS'):
         return
 
     variants = (d.getVar("MULTILIB_VARIANTS") or "").split()
