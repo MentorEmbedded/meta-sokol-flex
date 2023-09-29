@@ -28,3 +28,15 @@ python () {
     d.appendVar('EXTRA_OECONF', ' --with-consumerd32-libdir=' + lib32path)
     d.appendVar('EXTRA_OECONF', ' --with-consumerd32-bin=' + os.path.join(lib32path, 'lttng', 'libexec', 'lttng-consumerd'))
 }
+
+# Split off components which should be per-multilib
+PACKAGE_BEFORE_PN:prepend:feature-sokol-flex-staging = "${PN}-consumerd liblttng-ctl "
+
+RDEPENDS:${PN}:append:feature-sokol-flex-staging = " ${PN}-consumerd ${MLPREFIX}liblttng-ctl"
+
+FILES:${PN}-consumerd = "${libdir}/lttng/libexec/lttng-consumerd"
+# Since files are installed into ${libdir}/lttng/libexec we match
+# the libexec insane test so skip it.
+INSANE_SKIP:${PN}-consumerd = "dev-so"
+
+FILES:${MLPREFIX}liblttng-ctl = "${libdir}/liblttng-ctl.so.*"
