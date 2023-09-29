@@ -11,22 +11,31 @@ python () {
         return
 
     variants = (d.getVar("MULTILIB_VARIANTS") or "").split()
-    if 'lib32' in variants:
-        thirty_two = get_multilib_datastore('lib32', d)
-        sixty_four = d
-    elif 'lib64' in variants:
-        thirty_two = d
-        sixty_four = get_multilib_datastore('lib64', d)
+
+    # The 32-bit build refers to the 64, and vice versa
+    mlprefix = d.getVar('MLPREFIX')
+    if 'lib64' in variants:
+        if mlprefix:
+            other_variant = ''
+            other = '32'
+        else:
+            other_variant = 'lib64'
+            other = '64'
+    elif 'lib32' in variants:
+        if mlprefix:
+            other_variant = ''
+            other = '64'
+        else:
+            other_variant = 'lib32'
+            other = '32'
     else:
         return
 
-    lib64path = sixty_four.getVar('libdir')
-    d.appendVar('EXTRA_OECONF', ' --with-consumerd64-libdir=' + lib64path)
-    d.appendVar('EXTRA_OECONF', ' --with-consumerd64-bin=' + os.path.join(lib64path, 'lttng', 'libexec', 'lttng-consumerd'))
-
-    lib32path = thirty_two.getVar('libdir')
-    d.appendVar('EXTRA_OECONF', ' --with-consumerd32-libdir=' + lib32path)
-    d.appendVar('EXTRA_OECONF', ' --with-consumerd32-bin=' + os.path.join(lib32path, 'lttng', 'libexec', 'lttng-consumerd'))
+    other_data = get_multilib_datastore(other_variant, d)
+    other_libdir = other_data.getVar('libdir')
+    consumerd = os.path.join(other_libdir, 'lttng', 'libexec', 'lttng-consumerd')
+    d.appendVar('EXTRA_OECONF', ' --with-consumerd%s-libdir=%s' % (other, other_libdir))
+    d.appendVar('EXTRA_OECONF', ' --with-consumerd%s-bin=%s' % (other, consumerd))
 }
 
 # Split off components which should be per-multilib
