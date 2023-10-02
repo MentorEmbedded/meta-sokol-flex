@@ -6,8 +6,11 @@ FILESEXTRAPATHS:prepend:feature-sokol-flex-staging := "${THISDIR}/lttng-tools:"
 
 SRC_URI:append:feature-sokol-flex-staging = " file://0001-Ensure-that-the-consumerd-configure-arguments-are-us.patch"
 
+STAGING_ENABLED = ""
+STAGING_ENABLED:feature-sokol-flex-staging = "1"
+
 python () {
-    if not d.getVar('MULTILIBS'):
+    if not d.getVar('MULTILIBS') or not d.getVar('STAGING_ENABLED'):
         return
 
     variants = (d.getVar("MULTILIB_VARIANTS") or "").split()
