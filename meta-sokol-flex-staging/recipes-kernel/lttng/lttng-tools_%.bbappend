@@ -1,22 +1,54 @@
+# ---------------------------------------------------------------------------------------------------------------------
+# SPDX-License-Identifier: MIT
+# ---------------------------------------------------------------------------------------------------------------------
+
+FILESEXTRAPATHS:prepend:feature-sokol-flex-staging := "${THISDIR}/lttng-tools:"
+
+SRC_URI:append:feature-sokol-flex-staging = " file://0001-Ensure-that-the-consumerd-configure-arguments-are-us.patch"
+
+STAGING_ENABLED = ""
+STAGING_ENABLED:feature-sokol-flex-staging = "1"
+
 python () {
-    if not d.getVar('MULTILIBS'):
+    if not d.getVar('MULTILIBS') or not d.getVar('STAGING_ENABLED'):
         return
 
     variants = (d.getVar("MULTILIB_VARIANTS") or "").split()
-    if 'lib32' in variants:
-        thirty_two = get_multilib_datastore('lib32', d)
-        sixty_four = d
-    elif 'lib64' in variants:
-        thirty_two = d
-        sixty_four = get_multilib_datastore('lib64', d)
+
+    # The 32-bit build refers to the 64, and vice versa
+    mlprefix = d.getVar('MLPREFIX')
+    if 'lib64' in variants:
+        if mlprefix:
+            other_variant = ''
+            other = '32'
+        else:
+            other_variant = 'lib64'
+            other = '64'
+    elif 'lib32' in variants:
+        if mlprefix:
+            other_variant = ''
+            other = '64'
+        else:
+            other_variant = 'lib32'
+            other = '32'
     else:
         return
 
-    lib64path = sixty_four.getVar('libdir')
-    d.appendVar('EXTRA_OECONF', ' --with-consumerd64-libdir=' + lib64path)
-    d.appendVar('EXTRA_OECONF', ' --with-consumerd64-bin=' + os.path.join(lib64path, 'lttng', 'libexec', 'lttng-consumerd'))
-
-    lib32path = thirty_two.getVar('libdir')
-    d.appendVar('EXTRA_OECONF', ' --with-consumerd32-libdir=' + lib32path)
-    d.appendVar('EXTRA_OECONF', ' --with-consumerd32-bin=' + os.path.join(lib32path, 'lttng', 'libexec', 'lttng-consumerd'))
+    other_data = get_multilib_datastore(other_variant, d)
+    other_libdir = other_data.getVar('libdir')
+    consumerd = os.path.join(other_libdir, 'lttng', 'libexec', 'lttng-consumerd')
+    d.appendVar('EXTRA_OECONF', ' --with-consumerd%s-libdir=%s' % (other, other_libdir))
+    d.appendVar('EXTRA_OECONF', ' --with-consumerd%s-bin=%s' % (other, consumerd))
 }
+
+# Split off components which should be per-multilib
+PACKAGE_BEFORE_PN:prepend:feature-sokol-flex-staging = "${PN}-consumerd liblttng-ctl "
+
+RDEPENDS:${PN}:append:feature-sokol-flex-staging = " ${PN}-consumerd ${MLPREFIX}liblttng-ctl"
+
+FILES:${PN}-consumerd = "${libdir}/lttng/libexec/lttng-consumerd"
+# Since files are installed into ${libdir}/lttng/libexec we match
+# the libexec insane test so skip it.
+INSANE_SKIP:${PN}-consumerd = "dev-so"
+
+FILES:${MLPREFIX}liblttng-ctl = "${libdir}/liblttng-ctl.so.*"
