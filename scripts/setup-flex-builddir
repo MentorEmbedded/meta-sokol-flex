@@ -261,6 +261,7 @@ setup_builddir () {
     case ${MACHINE} in
         qemu*)
             OPTIONALLAYERS="$OPTIONALLAYERS flex-bsp-$MACHINE"
+            EXCLUDEDLAYERS="$EXCLUDEDLAYERS flex-vendor-integration"
             ;;
     esac
 
