@@ -1,19 +1,19 @@
-From 0d09ed08a84ec77e01bede24847f4ced4e99057c Mon Sep 17 00:00:00 2001
+From 30e90ed6f5a0b187d75c0c12304198b01af7e3ea Mon Sep 17 00:00:00 2001
 From: Christopher Larson <chris_larson@mentor.com>
 Date: Fri, 29 Sep 2023 17:07:30 -0500
 Subject: [PATCH] Ensure that the consumerd configure arguments are used
 
-Currently, the --with-consumerd32-bin, --with-consumerd32-libdir, etc arguments
-are not being used by lttng-sessiond, which causes problems with providing a
-well configured multilib tracing environment. Ensure that they are used as the
-default values in sessiond.
+Currently, the --with-consumerd32-bin, --with-consumerd32-libdir, etc
+arguments are not being used by lttng-sessiond, which causes problems
+with providing a well configured multilib tracing environment. Ensure
+that they are used as the default values in sessiond.
 
 Signed-off-by: Christopher Larson <chris_larson@mentor.com>
+
 ---
-Upstream-Status: Pending
 
 diff --git a/src/bin/lttng-sessiond/sessiond-config.c b/src/bin/lttng-sessiond/sessiond-config.c
-index 05e0ef1..d98876d 100644
+index 05e0ef1..e039287 100644
 --- a/src/bin/lttng-sessiond/sessiond-config.c
 +++ b/src/bin/lttng-sessiond/sessiond-config.c
 @@ -51,14 +51,14 @@ struct sessiond_config sessiond_config_build_defaults = {
@@ -22,16 +22,16 @@ index 05e0ef1..d98876d 100644
  	.consumerd32_path.value =		NULL,
 -	.consumerd32_bin_path.value =		NULL,
 -	.consumerd32_lib_dir.value =		NULL,
-+	.consumerd32_bin_path.value =		DEFAULT_USTCONSUMERD32_BIN,
-+	.consumerd32_lib_dir.value =		DEFAULT_USTCONSUMERD32_LIBDIR,
++	.consumerd32_bin_path.value =		DEFAULT_USTCONSUMERD32_BIN[0] != '\0' ? DEFAULT_USTCONSUMERD32_BIN : NULL,
++	.consumerd32_lib_dir.value =		DEFAULT_USTCONSUMERD32_LIBDIR[0] != '\0' ? DEFAULT_USTCONSUMERD32_LIBDIR : NULL,
  	.consumerd32_err_unix_sock_path.value = NULL,
  	.consumerd32_cmd_unix_sock_path.value = NULL,
  
  	.consumerd64_path.value =		NULL,
 -	.consumerd64_bin_path.value =		NULL,
 -	.consumerd64_lib_dir.value =		NULL,
-+	.consumerd64_bin_path.value =		DEFAULT_USTCONSUMERD64_BIN,
-+	.consumerd64_lib_dir.value =		DEFAULT_USTCONSUMERD64_LIBDIR,
++	.consumerd64_bin_path.value =		DEFAULT_USTCONSUMERD64_BIN[0] != '\0' ? DEFAULT_USTCONSUMERD64_BIN : NULL,
++	.consumerd64_lib_dir.value =		DEFAULT_USTCONSUMERD64_LIBDIR[0] != '\0' ? DEFAULT_USTCONSUMERD64_LIBDIR : NULL,
  	.consumerd64_err_unix_sock_path.value = NULL,
  	.consumerd64_cmd_unix_sock_path.value = NULL,
  
