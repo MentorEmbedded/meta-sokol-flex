@@ -16,6 +16,18 @@ if [ -z "$OEINIT" ]; then
     echo >&2 "oe-init-build-env not found in @OEROOT@"
     false
 else
+    if [ -d "@OEROOT@/../pyrex" ]; then
+        echo >&2 "Using pyrex to run builds in a docker container."
+
+        PYREX_CONFIG_BIND="@OEROOT@/.."
+        BITBAKEDIR=@OEROOT@/../bitbake
+        OEROOT=@OEROOT@/../oe-core
+        PYREX_OEINIT="$OEINIT"
+        PYREX_ROOT="@OEROOT@/../pyrex"
+        PYREXCONFFILE="$BUILDDIR/conf/pyrex.ini"
+        OEINIT="$PYREX_ROOT/pyrex-init-build-env"
+    fi
+
     . "$OEINIT" "$BUILDDIR" "@BITBAKEDIR@"
     export BB_ENV_PASSTHROUGH_ADDITIONS="$BB_ENV_PASSTHROUGH_ADDITIONS GIT_SSL_CAINFO SALT_LICENSE_SERVER SALT_EXCLUDE_LICENSES SALT_INCLUDE_LICENSES SALT_LOGGING_DIR SALT_PKGINFO_FILE SALT_LICENSE_SOURCE WSL_INTEROP"
     unset TEMPLATECONF OEINIT
