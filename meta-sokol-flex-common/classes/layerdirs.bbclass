@@ -8,7 +8,7 @@ def save_layerdirs(d):
 
         l = bb.data.init()
         l.setVar('LAYERDIR', layerpath)
-        l = bb.parse.handle(layerconf, l, include=True, baseconfig=True)
+        l = bb.parse.handle(layerconf, l)
         l.expandVarref('LAYERDIR')
 
         for layername in (l.getVar('BBFILE_COLLECTIONS', True) or '').split():

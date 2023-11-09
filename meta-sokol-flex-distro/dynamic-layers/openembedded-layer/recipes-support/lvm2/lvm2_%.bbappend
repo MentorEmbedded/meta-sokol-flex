@@ -2,10 +2,7 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-BBPATH .= ":${LAYERDIR}"
+FLEX_LVM_PKG = ""
+FLEX_LVM_PKG:sokol-flex = "lvm2-flex.inc"
 
-BBFILE_COLLECTIONS += "sokol-flex-common"
-BBFILE_PATTERN_sokol-flex-common = "^${LAYERDIR}/"
-BBFILE_PATTERN_IGNORE_EMPTY_sokol-flex-common = "1"
-BBFILE_PRIORITY_sokol-flex-common = "1"
-LAYERSERIES_COMPAT_sokol-flex-common = "kirkstone"
+require ${FLEX_LVM_PKG}
