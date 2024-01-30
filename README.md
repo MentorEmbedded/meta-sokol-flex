@@ -1,7 +1,7 @@
 # OpenEmbedded/Yocto layers for Sokol Flex OS
 
-This repository holds the layers needed by our Yocto builds of Sokol Flex OS. At
-this time there are three such layers:
+This repository holds the layers needed by our Yocto builds of Sokol Flex OS.
+Currently the Sokol Flex OS layers are:
 
 - meta-sokol-flex-distro: The Sokol Flex OS distribution layer
 - meta-sokol-flex-support: Support files for Sokol Flex OS
