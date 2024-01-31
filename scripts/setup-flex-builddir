@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: GPL-2.0
 # ---------------------------------------------------------------------------------------------------------------------
 #
-# Copyright 2022 Siemens
+# Copyright 2024 Siemens
 #
 # This file is licensed under the terms of the GNU General Public License
 # version 2.  This program  is licensed "as is" without any warranty of any
@@ -275,7 +275,7 @@ setup_builddir () {
         existing_builddir=0
     fi
 
-    mkdir -p $BUILDDIR/conf
+    mkdir -p $BUILDDIR/conf/multiconfig
 
     if [ -z "$TEMPLATECONF" ]; then
         if [ -f "$BUILDDIR/conf/templateconf.cfg" ]; then
@@ -299,6 +299,26 @@ setup_builddir () {
     else
         if [ -n "$MACHINE" ]; then
             echo "Configuring existing local.conf for $MACHINE"
+        fi
+    fi
+
+    if [ ! -e $BUILDDIR/conf/multiconfig/dom0.conf ]; then
+        cp $TEMPLATECONF/multiconfig/dom0.conf $BUILDDIR/conf/multiconfig/dom0.conf
+        echo "You had no multiconfig/dom0.conf file. This configuration file has therefore been"
+        echo "created for you with some default values."
+    else
+        if [ -n "$MACHINE" ]; then
+            echo "Configuring existing multiconfig/dom0.conf for $MACHINE"
+        fi
+    fi
+
+    if [ ! -e $BUILDDIR/conf/multiconfig/domu.conf ]; then
+        cp $TEMPLATECONF/multiconfig/domu.conf $BUILDDIR/conf/multiconfig/domu.conf
+        echo "You had no multiconfig/domu.conf file. This configuration file has therefore been"
+        echo "created for you with some default values."
+    else
+        if [ -n "$MACHINE" ]; then
+            echo "Configuring existing multiconfig/domu.conf for $MACHINE"
         fi
     fi
 
