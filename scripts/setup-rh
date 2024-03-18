@@ -1,9 +1,9 @@
-#!/bin/sh
+#!/bin/sh -x
 # ---------------------------------------------------------------------------------------------------------------------
 # SPDX-License-Identifier: GPL-2.0
 # ---------------------------------------------------------------------------------------------------------------------
 #
-# Copyright 2022 Siemens
+# Copyright 2024 Siemens
 #
 # This file is licensed under the terms of the GNU General Public License
 # version 2.  This program  is licensed "as is" without any warranty of any
@@ -27,12 +27,17 @@ if [ "$(id -u)" != "0" ]; then
     exec sudo "$0" "$@"
 fi
 
+# Enable required repo's to get install rpcgen package
+
 echo "Enabling any required repos"
 if grep -q "^Red Hat Enterprise Linux release 9" /etc/redhat-release 2>/dev/null; then
     ARCH=$(/bin/arch)
     subscription-manager repos --enable "codeready-builder-for-rhel-9-${ARCH}-rpms"
-elif grep -q "^CentOS" /etc/redhat-release 2>/dev/null; then
-    dnf config-manager --set-enabled PowerTools
+elif grep -q "^Red Hat Enterprise Linux release 8" /etc/redhat-release 2>/dev/null; then
+    ARCH=$(/bin/arch)
+    subscription-manager repos --enable "codeready-builder-for-rhel-8-${ARCH}-rpms"
+elif grep -q "^Rocky Linux" /etc/redhat-release 2>/dev/null; then
+    dnf config-manager --set-enabled powertools
 fi
 
 echo "Installing packages required to build Sokol Flex OS"
@@ -40,4 +45,13 @@ dnf install --assumeyes "$@" $packages || {
     echo >&2 "Error installing our required packages, aborting"
     exit 1
 }
+
+# Due to lower make and python version we are unable to make build succesful so installing required version and creating symbolic link.  
+
+if grep -q "^Red Hat Enterprise Linux release 8" /etc/redhat-release 2>/dev/nulli || grep -q "^Rocky Linux" /etc/redhat-release 2>/dev/null; then
+    dnf install --assumeyes make43
+    ln -sfn /opt/rh/make43/bin/make /usr/local/bin/make
+    ln -sfn /usr/bin/python3.9 /usr/local/bin/python3
+fi
+
 echo "Setup complete"
