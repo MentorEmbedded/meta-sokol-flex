@@ -1,0 +1,114 @@
+From 7d552498d90a4fccbaeaf35655bfc680c7ad6d0b Mon Sep 17 00:00:00 2001
+From: Prajwal <prajwal.gowda-hm.ext@siemens.com>
+Date: Tue, 26 Mar 2024 13:31:45 +0530
+Subject: [PATCH] mxm_wifiex: fix next-20230119 Linux Factory rebase build
+
+When build wifi driver based on next-20230119 Linux code, will observe
+the following build errors.
+/mwifiex/mxm_wifiex/wlan_src/mlinux/moal_eth_ioctl.c: In function ‘woal_priv_get_ap’:
+/mwifiex/mxm_wifiex/wlan_src/mlinux/moal_eth_ioctl.c:5968:39: error: invalid application of ‘sizeof’ to incomplete type ‘char[]’
+ 5968 |                                 sizeof(mwr->u.ap_addr.sa_data));
+      |                                       ^
+make[2]: *** [scripts/Makefile.build:252: /work/mwifiex/mxm_wifiex/wlan_src/mlinux/moal_eth_ioctl.o] Error 1
+make[1]: *** [Makefile:2027: /work/mwifiex/mxm_wifiex/wlan_src] Error 2
+make[1]: Leaving directory '/work/linux-nxp-rebase'
+
+This is caused by kernel patch b5f0de6df6dc("net: dev: Convert sa_data
+to flexible array in struct sockaddr"), now anything using
+sizeof(sa->sa_data) must switch to sizeof(sa->sa_data_min).
+
+Signed-off-by: Sherry Sun <sherry.sun@nxp.com>
+
+Upstream-status: Backport from
+https://github.com/nxp-imx/mwifiex/commit/f965f1f2cf9c08c4409778e6479fda9835ed9548
+
+JIRA_ID: SB-23067
+Note: This patch has been modified to support linux-flex kernel version
+
+Signed-off-by: Prajwal <prajwal.gowda-hm.ext@siemens.com>
+---
+ mxm_wifiex/wlan_src/mlinux/moal_eth_ioctl.c | 4 ++++
+ mxm_wifiex/wlan_src/mlinux/moal_shim.c      | 4 ++++
+ mxm_wifiex/wlan_src/mlinux/moal_uap_wext.c  | 4 ++++
+ mxm_wifiex/wlan_src/mlinux/moal_wext.c      | 8 ++++++++
+ 4 files changed, 20 insertions(+)
+
+diff --git a/mlinux/moal_eth_ioctl.c b/mlinux/moal_eth_ioctl.c
+index 81482d8..31a8106 100644
+--- a/mlinux/moal_eth_ioctl.c
++++ b/mlinux/moal_eth_ioctl.c
+@@ -5965,7 +5965,11 @@ static int woal_priv_get_ap(moal_private *priv, t_u8 *respbuf, t_u32 respbuflen)
+ 	if (bss_info.media_connected == MTRUE) {
+ 		moal_memcpy_ext(priv->phandle, mwr->u.ap_addr.sa_data,
+ 				&bss_info.bssid, MLAN_MAC_ADDR_LENGTH,
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 150)
++				sizeof(mwr->u.ap_addr.sa_data_min));
++#else
+ 				sizeof(mwr->u.ap_addr.sa_data));
++#endif
+ 	} else {
+ 		memset(mwr->u.ap_addr.sa_data, 0, MLAN_MAC_ADDR_LENGTH);
+ 	}
+diff --git a/mlinux/moal_shim.c b/mlinux/moal_shim.c
+index aef5e73..150af65 100644
+--- a/mlinux/moal_shim.c
++++ b/mlinux/moal_shim.c
+@@ -2425,7 +2425,11 @@ mlan_status moal_recv_event(t_void *pmoal, pmlan_event pmevent)
+ 			memset(wrqu.ap_addr.sa_data, 0x00, ETH_ALEN);
+ 			moal_memcpy_ext(priv->phandle, wrqu.ap_addr.sa_data,
+ 					pmevent->event_buf, ETH_ALEN,
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 150)
++					sizeof(wrqu.ap_addr.sa_data_min));
++#else
+ 					sizeof(wrqu.ap_addr.sa_data));
++#endif
+ 			wrqu.ap_addr.sa_family = ARPHRD_ETHER;
+ 			wireless_send_event(priv->netdev, SIOCGIWAP, &wrqu,
+ 					    NULL);
+diff --git a/mlinux/moal_uap_wext.c b/mlinux/moal_uap_wext.c
+index c74e542..806a600 100644
+--- a/mlinux/moal_uap_wext.c
++++ b/mlinux/moal_uap_wext.c
+@@ -224,7 +224,11 @@ static int woal_get_wap(struct net_device *dev, struct iw_request_info *info,
+ 	if (priv->bss_started)
+ 		moal_memcpy_ext(priv->phandle, awrq->sa_data,
+ 				priv->current_addr, MLAN_MAC_ADDR_LENGTH,
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 150)
++				sizeof(awrq->sa_data_min));
++#else
+ 				sizeof(awrq->sa_data));
++#endif
+ 	else
+ 		memset(awrq->sa_data, 0, MLAN_MAC_ADDR_LENGTH);
+ 	awrq->sa_family = ARPHRD_ETHER;
+diff --git a/mlinux/moal_wext.c b/mlinux/moal_wext.c
+index 60697ac..aefca6e 100644
+--- a/mlinux/moal_wext.c
++++ b/mlinux/moal_wext.c
+@@ -612,7 +612,11 @@ static int woal_get_wap(struct net_device *dev, struct iw_request_info *info,
+ 
+ 	if (bss_info.media_connected == MTRUE)
+ 		moal_memcpy_ext(priv->phandle, awrq->sa_data, &bss_info.bssid,
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 150)
++				MLAN_MAC_ADDR_LENGTH, sizeof(awrq->sa_data_min));
++#else
+ 				MLAN_MAC_ADDR_LENGTH, sizeof(awrq->sa_data));
++#endif
+ 	else
+ 		memset(awrq->sa_data, 0, MLAN_MAC_ADDR_LENGTH);
+ 	awrq->sa_family = ARPHRD_ETHER;
+@@ -3032,7 +3036,11 @@ static int woal_get_scan(struct net_device *dev, struct iw_request_info *info,
+ 		iwe.u.ap_addr.sa_family = ARPHRD_ETHER;
+ 		moal_memcpy_ext(priv->phandle, iwe.u.ap_addr.sa_data,
+ 				&scan_table[i].mac_address, ETH_ALEN,
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 150)
++				sizeof(iwe.u.ap_addr.sa_data_min));
++#else
+ 				sizeof(iwe.u.ap_addr.sa_data));
++#endif
+ 
+ 		iwe.len = IW_EV_ADDR_LEN;
+ 		current_ev = IWE_STREAM_ADD_EVENT(info, current_ev, end_buf,
+-- 
+2.43.2
+
