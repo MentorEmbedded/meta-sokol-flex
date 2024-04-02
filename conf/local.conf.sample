@@ -12,7 +12,8 @@ MACHINE ??= "qemux86"
 # where FLEXDIR is the path to your Sokol Flex OS workspace
 #TOOLCHAINS_PATH ?= "${FLEXDIR}/toolchains"
 
-# Use the oe/yocto-built toolchain rather than the external
+# Uncomment to use the oe/yocto-built toolchain rather than the external
+# Sourcery CodeBench toolchain
 #TCMODE:sokol-flex = "default"
 
 # Add additional packages to images
