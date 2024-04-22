@@ -110,17 +110,15 @@ prompt_choice () {
 }
 
 remove_old_versions () {
-    while IFS=- read -r product version machine; do
-        printf '%s\t%s\t%s\n' "$product" "$version" "$machine"
-    done \
+    sed -e 's/\-\([0-9]\+\.[0-9]\+\.[0-9]\+\)\-/'$'\t\\1\t/g' \
     | uniq -f2 \
     | tr "$(printf '\t')" -
 }
 
 sort_manifests () {
-    sort -V \
-    | tac \
-    | sort -s -t- -k3 \
+    sed -e 's/\-\([0-9]\+\.[0-9]\+\.[0-9]\+\)\-/'$'\t\\1\t/g' \
+    | sort -rV -k2 \
+    | tr "$(printf '\t')" - \
     | if [ $all_versions -eq 0 ]; then remove_old_versions; else cat; fi \
     | sed '/qemu/!s/^/1 /; /qemu/s/^/0 /;' | sort -srn | sed 's/^[01] //'
 }
