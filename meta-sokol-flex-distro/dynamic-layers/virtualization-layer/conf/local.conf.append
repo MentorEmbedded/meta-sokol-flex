@@ -1,2 +1,5 @@
 # Comment out the following to disable virtualization support
 USER_FEATURES += "virtualization"
+
+# Uncomment to add extra-space to rootfs (default: 204800KB) for virtualization only
+#IMAGE_ROOTFS_EXTRA_SPACE:append = "${@bb.utils.contains('USER_FEATURES', 'virtualization', ' + 204800', '', d)}"
