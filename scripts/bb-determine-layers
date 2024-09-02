@@ -218,7 +218,7 @@ class Layer(object):
         data.setVar('LAYERDIR', layer_path)
         initial_collections = set((data.getVar('BBFILE_COLLECTIONS', True) or '').split())
         try:
-            data = bb.parse.handle(lconf, data, include=True)
+            data = bb.parse.handle(lconf, data, include=True, baseconfig=True)
         except BaseException as exc:
             raise LayerError(exc)
 
@@ -502,7 +502,7 @@ def determine_layers(cmdline_opts):
     data = bb.data.init()
     bb.parse.init_parser(data)
     if args.config_file:
-        data = bb.parse.handle(args.config_file, data, include=True)
+        data = bb.parse.handle(args.config_file, data, include=True, baseconfig=True)
 
     all_layers = Layers()
     collections = {}

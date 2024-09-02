@@ -280,8 +280,8 @@ setup_builddir () {
     if [ -z "$TEMPLATECONF" ]; then
         if [ -f "$BUILDDIR/conf/templateconf.cfg" ]; then
             TEMPLATECONF="$(cat "$BUILDDIR/conf/templateconf.cfg")"
-        elif [ -e "$layerdir/conf/local.conf.sample" ]; then
-            TEMPLATECONF="$layerdir/conf"
+        elif [ -e "$layerdir/meta-sokol-flex-distro/conf/templates/default/local.conf.sample" ]; then
+            TEMPLATECONF="$layerdir/meta-sokol-flex-distro/conf/templates/default"
         elif [ -e "$OEROOT/.templateconf" ]; then
             . "$OEROOT/.templateconf"
             # Convert to absolute path

@@ -8,6 +8,8 @@ arguments are not being used by lttng-sessiond, which causes problems
 with providing a well configured multilib tracing environment. Ensure
 that they are used as the default values in sessiond.
 
+Upstream-Status: Inappropriate [OE specific]
+
 Signed-off-by: Christopher Larson <chris_larson@mentor.com>
 
 ---

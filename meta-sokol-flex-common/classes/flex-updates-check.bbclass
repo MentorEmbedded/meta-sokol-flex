@@ -4,7 +4,6 @@
 
 # If any of these layers are available, but not included in BBLAYERS, warn
 UPDATES_CHECK_LAYERS ?= "\
-    ${FLEXDIR}/meta-flex-cve \
 "
 UPDATES_CHECK_LAYERS[type] = "list"
 
