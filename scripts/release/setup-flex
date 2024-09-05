@@ -43,7 +43,7 @@ else
     unset flex_arg
     "$flexdir/scripts/setup-workspace" "$@" && \
     cd "$WORKSPACEDIR" && \
-    echo >&2 "Sokol Flex OS setup complete in $WORKSPACEDIR" && \
+    echo >&2 "Flex OS setup complete in $WORKSPACEDIR" && \
     echo >&2 "You can now source $WORKSPACEDIR/meta-sokol-flex/setup-environment for setting up a build."
 fi
 # vim: set ft=sh :
