@@ -117,7 +117,6 @@ def get_cb_options(d):
     options = d.getVarFlags('CB_MBS_OPTIONS') or {}
 
     l = d.createCopy()
-    l.finalize()
     l.setVar('DEBUG_PREFIX_MAP', '')
     l.setVar('STAGING_DIR_TARGET', '$SDKTARGETSYSROOT')
 
