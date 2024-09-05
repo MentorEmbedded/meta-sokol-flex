@@ -1,8 +1,5 @@
 
-Common bitbake targets are:
+Common bitbake target is:
 
     development-image
-    production-image
 
-production-image requires that the ROOT_PASSWORD variable be set. See
-conf/local.conf for details.
