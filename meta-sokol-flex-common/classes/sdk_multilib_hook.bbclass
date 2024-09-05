@@ -9,7 +9,7 @@ SDK_POSTPROCESS_MULTILIB_COMMAND ?= ""
 REAL_MULTIMACH_TARGET_SYS ?= "${TUNE_PKGARCH}${TARGET_VENDOR}-${TARGET_OS}"
 SDK_ENV_SETUP_SCRIPT ?= "${SDK_OUTPUT}/${SDKPATH}/environment-setup-${REAL_MULTIMACH_TARGET_SYS}"
 
-SDK_POSTPROCESS_COMMAND:prepend = "sdk_postprocess_per_multilib;"
+SDK_POSTPROCESS_COMMAND:prepend = "sdk_postprocess_per_multilib "
 
 python sdk_postprocess_per_multilib () {
     # Handle multilibs in the SDK environment, siteconfig, etc files...
@@ -22,7 +22,7 @@ python sdk_postprocess_per_multilib () {
     localdata.setVar('SDKTARGETSYSROOT', d.getVar('SDKTARGETSYSROOT'))
     localdata.setVar('libdir', d.getVar('target_libdir', False))
 
-    commands = [cmd.strip() for cmd in d.getVar('SDK_POSTPROCESS_MULTILIB_COMMAND').split(';')]
+    commands = [cmd.strip() for cmd in d.getVar('SDK_POSTPROCESS_MULTILIB_COMMAND').split()]
     variants = d.getVar("MULTILIB_VARIANTS") or ""
     for variant in [''] + variants.split():
         if variant:

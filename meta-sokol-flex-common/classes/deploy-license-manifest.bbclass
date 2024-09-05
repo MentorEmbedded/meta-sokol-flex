@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-ROOTFS_POSTPROCESS_COMMAND += "deploy_license_manifest;"
-IMAGE_POSTPROCESS_COMMAND += "link_license_manifest;"
+ROOTFS_POSTPROCESS_COMMAND += "deploy_license_manifest"
+IMAGE_POSTPROCESS_COMMAND += "link_license_manifest"
 
 deploy_license_manifest () {
     if [ -e "${LICENSE_DIRECTORY}/${IMAGE_NAME}/license.manifest" ]; then

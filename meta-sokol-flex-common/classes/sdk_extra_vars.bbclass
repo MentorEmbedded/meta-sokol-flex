@@ -10,7 +10,7 @@ EXTRA_SDK_VARS ?= ""
 EXTRA_EXPORTED_SDK_VARS ?= ""
 EXTRA_SDK_LINES ?= ""
 
-SDK_POSTPROCESS_MULTILIB_COMMAND += "add_sdk_extra_vars;"
+SDK_POSTPROCESS_MULTILIB_COMMAND += "add_sdk_extra_vars"
 
 add_sdk_extra_vars () {
     if [ -e "${SDK_ENV_SETUP_SCRIPT}" ]; then

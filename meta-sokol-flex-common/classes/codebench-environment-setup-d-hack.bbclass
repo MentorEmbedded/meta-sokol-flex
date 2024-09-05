@@ -3,7 +3,7 @@
 # ---------------------------------------------------------------------------------------------------------------------
 
 # Work around lack of support for environment-setup.d in CodeBench
-SDK_PACKAGING_COMMAND:prepend:sdk-codebench-metadata = "merge_environment_setup_d; add_no_sysroot_suffix;"
+SDK_PACKAGING_COMMAND:prepend:sdk-codebench-metadata = "merge_environment_setup_d add_no_sysroot_suffix "
 
 merge_environment_setup_d() {
     for setup_d in "${SDK_OUTPUT}${SDKPATH}/sysroots/"*/environment-setup.d; do
