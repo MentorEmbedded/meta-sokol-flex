@@ -1,6 +1,6 @@
 inherit qt6-paths
 
-SDK_POSTPROCESS_COMMAND:prepend = "create_qt6_sdk_files;"
+SDK_POSTPROCESS_COMMAND:prepend = "create_qt6_sdk_files "
 
 EXE_EXT = ""
 EXE_EXT:sdkmingw32 = ".exe"

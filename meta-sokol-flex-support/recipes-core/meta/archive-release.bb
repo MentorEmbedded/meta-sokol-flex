@@ -19,11 +19,13 @@ BINARY_ARTIFACTS_COMPRESSION ?= ""
 BINARY_ARTIFACTS_COMPRESSION[doc] = "Compression type for images and downloads artifacts.\
  Available: '.bz2' and '.gz'. No compression if empty"
 
+# TODO: Hardcoding flex-os instead of ${DISTRO}, revert once DISTRO variable is up-to-date as
+# per new brand name
 ARCHIVE_RELEASE_VERSION ?= "${DISTRO_VERSION}"
-MANIFEST_NAME ?= "${DISTRO}-${ARCHIVE_RELEASE_VERSION}-${MACHINE}"
-EXTRA_MANIFEST_NAME ?= "${DISTRO}-${ARCHIVE_RELEASE_VERSION}"
+MANIFEST_NAME ?= "flex-os-${ARCHIVE_RELEASE_VERSION}-${MACHINE}"
+EXTRA_MANIFEST_NAME ?= "flex-os-${ARCHIVE_RELEASE_VERSION}"
 SCRIPTS_VERSION ?= "0"
-SCRIPTS_ARTIFACT_NAME ?= "${DISTRO}-scripts-${DISTRO_VERSION}.${SCRIPTS_VERSION}"
+SCRIPTS_ARTIFACT_NAME ?= "flex-os-scripts-${DISTRO_VERSION}.${SCRIPTS_VERSION}"
 
 # Don't allow git to chdir up past our workspace to avoid redistributing the wrong repository
 export GIT_CEILING_DIRECTORIES = "${WORKDIR}:${FLEXDIR}:${TOPDIR}:${HOME}"
