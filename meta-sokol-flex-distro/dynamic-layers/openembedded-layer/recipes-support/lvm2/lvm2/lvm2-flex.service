@@ -2,7 +2,7 @@
 Description=Linux Volume Manager
 DefaultDependencies=no
 Before=fsck-root.service local-fs.target 
-After=udev.service
+After=systemd-udevd.service
 
 [Service]
 Type=oneshot
