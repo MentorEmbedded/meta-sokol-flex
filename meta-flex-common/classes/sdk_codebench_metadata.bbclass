@@ -14,7 +14,6 @@ SDK_POSTPROCESS_MULTILIB_COMMAND:prepend:sdk-codebench-metadata = "adjust_sdk_sc
 TOOLCHAIN_HOST_TASK:append:sdk-codebench-metadata = " ${@bb.utils.contains('BBFILE_COLLECTIONS', 'flex-support', 'nativesdk-relocate-makefile', '', d)}"
 TOOLCHAIN_TARGET_TASK:append:sdk-codebench-metadata = " ${@bb.utils.contains('BBFILE_COLLECTIONS', 'flex-support', 'codebench-makefile', '', d)}"
 
-SOURCERY_VERSION ?= ""
 CODEBENCH_SDK_VARS += "\
     MACHINE \
     DISTRO \
@@ -31,14 +30,6 @@ CODEBENCH_SDK_VARS += "\
 TOOLCHAIN_PATH = "${SDKPATHNATIVE}${bindir_nativesdk}/${TARGET_SYS}"
 TOOLCHAIN_GDB_PATH = "${TOOLCHAIN_PATH}/${TARGET_PREFIX}gdb"
 
-SDKPATHTOOLCHAIN ?= "${SDKPATH}/toolchain"
-EXTERNAL_TOOLCHAIN_RELBIN = "${@os.path.relpath(d.getVar('EXTERNAL_TOOLCHAIN_BIN'), d.getVar('EXTERNAL_TOOLCHAIN'))}"
-TOOLCHAIN_PATH:tcmode-external-oe-sdk = "${SDKPATHTOOLCHAIN}/${EXTERNAL_TOOLCHAIN_RELBIN}"
-
-CODEBENCH_SDK_VARS:append:tcmode-external-sourcery = "\
-    SOURCERY_VERSION \
-    TOOLCHAIN_VERSION=${@d.getVar('SOURCERY_VERSION').split('-', 1)[0]} \
-"
 EXTRA_SDK_VARS:append:sdk-codebench-metadata = " ${CODEBENCH_SDK_VARS}"
 EXTRA_SDK_LINES:append:sdk-codebench-metadata = 'PATH=\$TOOLCHAIN_PATH:\$PATH\n'
 

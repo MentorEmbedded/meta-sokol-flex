@@ -8,14 +8,6 @@ DISTRO = 'flex-os'
 # The target machine for this build. Automatically set by setup-environment
 MACHINE ??= "qemux86"
 
-# The path to the toolchains installed with CodeBench. Default value: ${FLEXDIR}/toolchains,
-# where FLEXDIR is the path to your Flex OS workspace
-#TOOLCHAINS_PATH ?= "${FLEXDIR}/toolchains"
-
-# Uncomment to use the oe/yocto-built toolchain rather than the external
-# Sourcery CodeBench toolchain
-#TCMODE:flex-os = "default"
-
 # Add additional packages to images
 #CORE_IMAGE_EXTRA_INSTALL += "bash"
 
