@@ -40,7 +40,7 @@ elif grep -q "^Rocky Linux" /etc/redhat-release 2>/dev/null; then
     dnf config-manager --set-enabled powertools
 fi
 
-echo "Installing packages required to build Sokol Flex OS"
+echo "Installing packages required to build Flex OS"
 dnf install --assumeyes "$@" $packages || {
     echo >&2 "Error installing our required packages, aborting"
     exit 1

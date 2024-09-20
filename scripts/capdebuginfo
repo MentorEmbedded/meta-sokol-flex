@@ -7,7 +7,7 @@
 ###############################################################################
 # Name: Capture/Debug Information Tool
 # Description:
-#  Script to capture debug info from a Sokol Flex OS user's host
+#  Script to capture debug info from a Flex OS user's host
 #
 #
 # Copyright 2022 Siemens
@@ -18,7 +18,7 @@
 
 # Variables
 unset BUILDERR   # Path and filename of the flex build error log file
-unset FLEXDIR     # Root path of the Sokol Flex OS installation directory
+unset FLEXDIR     # Root path of the Flex OS installation directory
 
 HOMEDIR=${HOME}
 HOSTINFOFILE="hostinfo.txt"    # File containing info captured from user's host
@@ -31,7 +31,7 @@ usage () {
    cat >&2 <<END
 
 Description:
-   Capture debug info from a Sokol Flex OS user's host such as host environment and project log files.
+   Capture debug info from a Flex OS user's host such as host environment and project log files.
    The Script runs only if environment of the shell is already set using setup-environment script.
 
 Modes of operation:
@@ -167,7 +167,7 @@ get_hostprereqsinfo () {
    esac
 }
 
-# Collect Sokol Flex OS installation info from host 
+# Collect Flex OS installation info from host
 #    Input: $1=Output directory name 
 #           $2=Filename for host info collection
 get_flexinstallinfo () {
@@ -177,12 +177,12 @@ get_flexinstallinfo () {
    if [ -d "${HOMEDIR}"/.siemens ]; then
       cp -a "${HOMEDIR}"/.siemens/.registry "${__outputdir}"/host/siemens-registry
    else
-      echo -en "\\nNo Sokol Flex OS install info found!\\n" >> ${__output}
+      echo -en "\\nNo Flex OS install info found!\\n" >> ${__output}
    fi
 }
 
 
-# Collect Sokol Flex OS project build and error logs 
+# Collect Flex OS project build and error logs
 #    Input: $1=Output directory name 
 #           $2=BUILDERR
 #           $3=BUILDDIR
