@@ -1,0 +1,42 @@
+From 989cecf48f5785a35925e3c818cb968344334ac3 Mon Sep 17 00:00:00 2001
+From: Daniele Di Proietto <ddiproietto@google.com>
+Date: Tue, 9 May 2023 16:10:03 +0000
+Subject: [PATCH 1/1] ftrace: Avoid crashing if format doesn't match
+ expectations
+
+Kernel commit 0b04d4c0542e("f2fs: Fix f2fs_truncate_partial_nodes ftrace
+event") changed the format of an event in a way that causes perfetto to
+hit a PERFETTO_FATAL.
+
+The PERFETTO_FATAL was probably not intentional there, it was added
+(probably by mistake) by 6db99a9ca272("Add PERFETTO_DFATAL.").
+
+In any case, perfetto shouldn't crash for an event it doesn't
+understand.
+
+Bug: 281660544
+Change-Id: I20769f4ce47a2af4c90b87e4bfb709468b4568cf
+
+Upstream-Status: Backport [https://github.com/google/perfetto/commit/f1ee130d2d4fa37f3c57b4f05019d664ae6523a5]
+
+Signed-off-by: Hasan Ijaz <hasan.ijaz@siemens.com>
+---
+ src/traced/probes/ftrace/proto_translation_table.cc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/traced/probes/ftrace/proto_translation_table.cc b/src/traced/probes/ftrace/proto_translation_table.cc
+index fd2254089d..11b758bc54 100644
+--- a/src/traced/probes/ftrace/proto_translation_table.cc
++++ b/src/traced/probes/ftrace/proto_translation_table.cc
+@@ -124,7 +124,7 @@ bool MergeFieldInfo(const FtraceEvent::Field& ftrace_field,
+ 
+   if (!InferFtraceType(ftrace_field.type_and_name, ftrace_field.size,
+                        ftrace_field.is_signed, &field->ftrace_type)) {
+-    PERFETTO_FATAL(
++    PERFETTO_DFATAL(
+         "Failed to infer ftrace field type for \"%s.%s\" (type:\"%s\" "
+         "size:%d "
+         "signed:%d)",
+-- 
+2.46.1
+

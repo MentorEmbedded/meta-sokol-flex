@@ -2,8 +2,5 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-# Flex OS Flex does not support systemtap. Systemtap brings boost which takes lots of resources. So we do not need it.
-SYSTEMTAP:flex-os = ""
-
-# Add perfetto to tools-profile for tracing
-RDEPENDS:${PN}:append:flex-os = " perfetto"
+FILESEXTRAPATHS:prepend:flex-os := "${THISDIR}/${PN}:"
+SRC_URI:prepend:flex-os = "file://0001-ftrace-Avoid-crashing-if-format-doesn-t-match-expect.patch "
