@@ -6,4 +6,4 @@
 SYSTEMTAP:flex-os = ""
 
 # Add perfetto to tools-profile for tracing
-RDEPENDS:${PN}:append:flex-os = " perfetto"
+RDEPENDS:${PN}:append:flex-os = " perfetto libperfetto"
