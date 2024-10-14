@@ -21,13 +21,9 @@ IMAGE_FEATURES_DEVELOPMENT ?= "debug-tweaks"
 IMAGE_FEATURES_DEVELOPMENT:append:flex-bsp = " codebench-debug ssh-server-openssh"
 EXTRA_IMAGE_FEATURES = "${IMAGE_FEATURES_DEVELOPMENT}"
 
-# Image features for production-image
-IMAGE_FEATURES_PRODUCTION ?= ""
-IMAGE_FEATURES_DISABLED_PRODUCTION ?= "${IMAGE_FEATURES_DEVELOPMENT} ssh-server-dropbear"
-
-# Set the root password. Set to '0' to explicitly set and allow the empty root
-# password even in production-image. Set to '*' to explicitly disable root
-# login
+# Set the root password.
+# Set to '0' to explicitly allow the empty root password
+# Set to '*' to explicitly disable root login
 #ROOT_PASSWORD = "0"
 IMAGE_CLASSES:append = " image-root-password"
 
