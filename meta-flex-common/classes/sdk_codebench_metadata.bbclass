@@ -5,11 +5,11 @@
 # Write additiional metadata for CodeBench to the SDK when codebench-metadata is
 # in SDKIMAGE_FEATURES.
 
-inherit sdk_multilib_hook sdk_extra_vars codebench-environment-setup-d-hack
+inherit sdk_extra_vars codebench-environment-setup-d-hack
 
 OVERRIDES =. "${@bb.utils.contains('SDKIMAGE_FEATURES', 'codebench-metadata', 'sdk-codebench-metadata:', '', d)}"
 
-SDK_POSTPROCESS_MULTILIB_COMMAND:prepend:sdk-codebench-metadata = "adjust_sdk_script_codebench write_cb_mbs_options "
+SDK_POSTPROCESS_COMMAND:prepend:sdk-codebench-metadata = "adjust_sdk_script_codebench write_cb_mbs_options "
 
 TOOLCHAIN_HOST_TASK:append:sdk-codebench-metadata = " ${@bb.utils.contains('BBFILE_COLLECTIONS', 'flex-support', 'nativesdk-relocate-makefile', '', d)}"
 TOOLCHAIN_TARGET_TASK:append:sdk-codebench-metadata = " ${@bb.utils.contains('BBFILE_COLLECTIONS', 'flex-support', 'codebench-makefile', '', d)}"
