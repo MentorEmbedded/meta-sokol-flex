@@ -679,7 +679,7 @@ do_archive_images () {
 
     if echo "${OVERRIDES}" | tr ':' '\n' | grep -qx 'qemuall'; then
         ext="$(echo ${IMAGE_EXTENSIONS} | tr ' ' '\n' | grep -v '^tar' | head -n 1 | xargs)"
-        if [ ! -e "${DEPLOY_DIR_IMAGE}/${RELEASE_IMAGE}-${MACHINE}.$ext" ]; then
+        if [ ! -e "${DEPLOY_DIR_IMAGE}/${RELEASE_IMAGE}-${MACHINE}${IMAGE_NAME_SUFFIX}.$ext" ]; then
             bbfatal "Unable to find image for extension $ext, aborting"
         fi
         if [ -e "${DEPLOY_DIR_IMAGE}/${KERNEL_IMAGETYPE}-${MACHINE}.bin" ] || [ -e "${DEPLOY_DIR_IMAGE}/${KERNEL_IMAGETYPE}.bin" ]; then
@@ -717,8 +717,8 @@ do_archive_images () {
     echo "$PWD/bblayers.conf.sample" >>include
     echo "$PWD/conf-notes.txt" >>include
 
-    if [ -e "${DEPLOY_DIR_IMAGE}/${RELEASE_IMAGE}-${MACHINE}.qemuboot.conf" ]; then
-        cp "${DEPLOY_DIR_IMAGE}/${RELEASE_IMAGE}-${MACHINE}.qemuboot.conf" ${WORKDIR}/qemuboot.conf
+    if [ -e "${DEPLOY_DIR_IMAGE}/${RELEASE_IMAGE}-${MACHINE}${IMAGE_NAME_SUFFIX}.qemuboot.conf" ]; then
+        cp "${DEPLOY_DIR_IMAGE}/${RELEASE_IMAGE}-${MACHINE}${IMAGE_NAME_SUFFIX}.qemuboot.conf" ${WORKDIR}/qemuboot.conf
         sed -i -e 's,-${MACHINE},,g' ${WORKDIR}/qemuboot.conf
         set -- "$@" "--transform=s,${WORKDIR}/qemuboot.conf,${BINARY_INSTALL_PATH}/${RELEASE_IMAGE}.qemuboot.conf,"
         echo "${WORKDIR}/qemuboot.conf" >>include
