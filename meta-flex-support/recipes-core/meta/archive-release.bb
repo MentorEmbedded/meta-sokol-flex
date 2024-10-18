@@ -109,12 +109,18 @@ IMAGE_BASENAME = "${RELEASE_IMAGE}"
 EXTRA_IMAGES_ARCHIVE_RELEASE ?= ""
 DEPLOY_IMAGES ?= "\
     ${@' '.join('${IMAGE_LINK_NAME}.%s' % ext for ext in d.getVar('IMAGE_EXTENSIONS').split())} \
-    ${IMAGE_LINK_NAME}.license_manifest \
-    ${IMAGE_LINK_NAME}.license_manifest.csv \
     ${EXTRA_IMAGES_ARCHIVE_RELEASE} \
 "
 DEPLOY_IMAGES:append:qemuall = "${@' ' + d.getVar('KERNEL_IMAGETYPE') if 'wic' not in d.getVar('IMAGE_EXTENSIONS') else ''}"
 DEPLOY_IMAGES[doc] = "List of files from DEPLOY_DIR_IMAGE which will be archived"
+
+# License manifests to be archived
+DEPLOY_LIC_MANIFESTS ?= "\
+    package.manifest \
+    license.manifest \
+    image_license.manifest \
+"
+DEPLOY_LIC_MANIFESTS[doc] = "List of license manifest files from LICENSE_DIRECTORY/SSTATE_PKGARCH/IMAGE_LINK_NAME directory which will be archived"
 
 # If a wic image is enabled, that's all we want
 IMAGE_EXTENSIONS_FULL = "${@' '.join(d.getVar('IMAGE_EXTENSION_%s' % t) or t for t in d.getVar('IMAGE_FSTYPES').split())}"
@@ -661,11 +667,18 @@ bb_layers[vardeps] += "repo_root"
 bb_layers[vardepsexclude] += "layer%/ topdir##*/ layer#${topdir}/"
 
 do_archive_images () {
-    set -- "$@" "--transform=s,-${MACHINE},,i"
+    # transform IMAGE_LINK_NAME first before removing IMAGE_MACHINE_SUFFIX
+    set -- "$@" "--transform=s,${LICENSE_DIRECTORY}/${SSTATE_PKGARCH}/${IMAGE_LINK_NAME},${BINARY_INSTALL_PATH},"
+    set -- "$@" "--transform=s,${IMAGE_NAME_SUFFIX},,i"
+    set -- "$@" "--transform=s,${IMAGE_MACHINE_SUFFIX},,i"
     set -- "$@" "--transform=s,${DEPLOY_DIR_IMAGE},${BINARY_INSTALL_PATH},"
 
     for filename in ${DEPLOY_IMAGES}; do
         echo "${DEPLOY_DIR_IMAGE}/$filename" >>include
+    done
+
+    for filename in ${DEPLOY_LIC_MANIFESTS}; do
+        echo "${LICENSE_DIRECTORY}/${SSTATE_PKGARCH}/${IMAGE_LINK_NAME}/$filename" >>include
     done
 
     # Lock down any autorevs
