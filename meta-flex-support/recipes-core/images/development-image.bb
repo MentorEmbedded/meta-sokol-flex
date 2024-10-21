@@ -24,3 +24,6 @@ IMAGE_INSTALL:append:flex-os = " util-linux-mkfs"
 
 # Allow our BSPs to disable the login on tty1 via MACHINE_FEATURES
 IMAGE_FEATURES:append:flex-os = " ${@bb.utils.contains('MACHINE_FEATURES', 'disable-tty1-login', 'disable-tty1-login', '', d)}"
+
+# Remove kernel image installation in the RFS by default
+PACKAGE_EXCLUDE = "kernel-image-*"
