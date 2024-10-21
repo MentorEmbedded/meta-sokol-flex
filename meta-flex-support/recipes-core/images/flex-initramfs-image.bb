@@ -26,9 +26,6 @@ IMAGE_QA_COMMANDS:remove = "image_check_zapped_root_password"
 
 BAD_RECOMMENDATIONS += "busybox-syslog"
 
-# We don't need selinux labels in initramfs
-IMAGE_PREPROCESS_COMMAND:remove = "selinux_set_labels"
-
 # Take care of warnings due to dependency on noexec ${INITRAMFS_IMAGE}:do_image_complete's
 # do_packagedata() in our initramfs image for now. The fix needs to come from oe-core image
 # bbclass when available, after which this can be removed
