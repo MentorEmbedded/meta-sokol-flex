@@ -22,7 +22,5 @@ LICENSE = "MIT"
 
 inherit core-image image-buildinfo
 
-IMAGE_INSTALL:append:flex-os = " util-linux-mkfs"
-
 # Remove kernel image installation in the RFS by default
 PACKAGE_EXCLUDE = "kernel-image-*"
