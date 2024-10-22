@@ -9,7 +9,7 @@ inherit sdk_extra_vars codebench-environment-setup-d-hack
 
 OVERRIDES =. "${@bb.utils.contains('SDKIMAGE_FEATURES', 'codebench-metadata', 'sdk-codebench-metadata:', '', d)}"
 
-SDK_POSTPROCESS_COMMAND:prepend:sdk-codebench-metadata = "adjust_sdk_script_codebench write_cb_mbs_options "
+SDK_POSTPROCESS_COMMAND:prepend:sdk-codebench-metadata = "adjust_sdk_script_codebench write_cb_mbs_options add_sdk_extra_vars "
 
 TOOLCHAIN_HOST_TASK:append:sdk-codebench-metadata = " ${@bb.utils.contains('BBFILE_COLLECTIONS', 'flex-support', 'nativesdk-relocate-makefile', '', d)}"
 TOOLCHAIN_TARGET_TASK:append:sdk-codebench-metadata = " ${@bb.utils.contains('BBFILE_COLLECTIONS', 'flex-support', 'codebench-makefile', '', d)}"
@@ -37,6 +37,8 @@ CB_MBS_OPTIONS ?= ""
 CB_MBS_OPTIONS_FEATURES_MAP ?= ""
 CB_MBS_OPTIONS_FLAGS_MAP ?= ""
 CB_MBS_OPTIONS_FLAGS_VALUE_MAP ?= ""
+
+CB_MBS_OPTIONS[general.yocto.sdk.value] = "${REAL_MULTIMACH_TARGET_SYS}"
 
 CB_MBS_OPTIONS_CC_FLAGS_MAP ?= ""
 CB_MBS_OPTIONS_CC_FLAGS_MAP[-g] = "compiler*option.debugging.level=debugging.level.default"
