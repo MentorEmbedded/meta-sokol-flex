@@ -12,8 +12,6 @@ EXTRA_SDK_LINES ?= ""
 REAL_MULTIMACH_TARGET_SYS ?= "${TUNE_PKGARCH}${TARGET_VENDOR}-${TARGET_OS}"
 SDK_ENV_SETUP_SCRIPT ?= "${SDK_OUTPUT}/${SDKPATH}/environment-setup-${REAL_MULTIMACH_TARGET_SYS}"
 
-SDK_POSTPROCESS_COMMAND += "add_sdk_extra_vars"
-
 add_sdk_extra_vars () {
     if [ -e "${SDK_ENV_SETUP_SCRIPT}" ]; then
         cat <<END >>"${SDK_ENV_SETUP_SCRIPT}"
