@@ -5,7 +5,7 @@
 SUMMARY = "A development/debugging image that fully supports the target \
 device hardware."
 
-IMAGE_FEATURES = " \
+IMAGE_FEATURES:append = " \
     codebench-debug \
     debug-tweaks \
     package-management \
