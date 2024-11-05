@@ -706,23 +706,30 @@ do_archive_images () {
         echo runqemu >>include
     fi
 
+    # TEMPLATECONF expects the directory structure conf/templates/<template-name> where the conf
+    # directory should be under a yocto layer i.e. conf/layer.conf should exist, including a dummy
+    # layer.conf to suppress the check in oe-setup-builddir.
+    touch layer.conf
+    mkdir -p templates/default
+    pushd templates/default
     cp ${TEMPLATECONF}/conf-notes.txt .
     sed 's,^MACHINE ??=.*,MACHINE ??= "${MACHINE}",' ${TEMPLATECONF}/local.conf.sample >local.conf.sample
     if [ -n "${DISTRO}" ]; then
         sed -i 's,^DISTRO =.*,DISTRO = "${DISTRO}",' local.conf.sample
     fi
-
     sed -n '/^BBLAYERS/{n; :start; /\\$/{n; b start}; /^ *"$/d; :done}; p' ${TEMPLATECONF}/bblayers.conf.sample >bblayers.conf.sample
     echo 'BBLAYERS = "\' >>bblayers.conf.sample
     bb_layers | while read path relpath name; do
         printf '    $%s%s \\\n' '{FLEXDIR}/' "$relpath" >>bblayers.conf.sample
     done
     echo '"' >>bblayers.conf.sample
+    popd
 
     set -- "$@" "--transform=s,$PWD/,${CONF_INSTALL_PATH}/,"
-    echo "$PWD/local.conf.sample" >>include
-    echo "$PWD/bblayers.conf.sample" >>include
-    echo "$PWD/conf-notes.txt" >>include
+    echo "$PWD/layer.conf" >>include
+    echo "$PWD/templates/default/local.conf.sample" >>include
+    echo "$PWD/templates/default/bblayers.conf.sample" >>include
+    echo "$PWD/templates/default/conf-notes.txt" >>include
 
     if [ -e "${DEPLOY_DIR_IMAGE}/${RELEASE_IMAGE}-${MACHINE}${IMAGE_NAME_SUFFIX}.qemuboot.conf" ]; then
         cp "${DEPLOY_DIR_IMAGE}/${RELEASE_IMAGE}-${MACHINE}${IMAGE_NAME_SUFFIX}.qemuboot.conf" ${WORKDIR}/qemuboot.conf

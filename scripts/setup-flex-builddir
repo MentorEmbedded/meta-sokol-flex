@@ -227,7 +227,7 @@ setup_builddir () {
     if [ -n "$MACHINE" ]; then
         if [ -e $FLEXDIR/$MACHINE/binary ]; then
             # User specified machine and we have the binary content for this BSP
-            TEMPLATECONF=$FLEXDIR/$MACHINE/conf
+            TEMPLATECONF=$FLEXDIR/$MACHINE/conf/templates/default
         fi
     else
         if [ ! -e $BUILDDIR/conf/local.conf -o ! -e $BUILDDIR/conf/bblayers.conf ] || [ -z "$MACHINE" ]; then
@@ -251,7 +251,7 @@ setup_builddir () {
                 echo >&2 "Error: unable to locate installed Flex OS BSP, please specify MACHINE"
                 return 1
             else
-                TEMPLATECONF=$FLEXDIR/$MACHINE/conf
+                TEMPLATECONF=$FLEXDIR/$MACHINE/conf/templates/default
             fi
         fi
     fi
