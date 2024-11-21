@@ -94,10 +94,7 @@ BSPFILES_INSTALL_PATH = "${MACHINE}/${ARCHIVE_RELEASE_VERSION}"
 BINARY_INSTALL_PATH ?= "${BSPFILES_INSTALL_PATH}/binary"
 CONF_INSTALL_PATH ?= "${BSPFILES_INSTALL_PATH}/conf"
 
-# In our `images` artifact, nclude bmaptool and, for qemu, a runqemu wrapper
-SRC_URI += "https://github.com/01org/bmap-tools/releases/download/v3.4/bmaptool;name=bmaptool"
-SRC_URI[bmaptool.md5sum] = "7bc226c2b15aff58af31e421fa381d34"
-SRC_URI[bmaptool.sha256sum] = "8cedbb7a525dd4026b6cafe11f496de11dbda0f0e76a5b4938d2687df67bab7f"
+# In our `images` artifact, include a runqemu wrapper for qemu
 SRC_URI:append:qemuall = " file://runqemu.in"
 
 # Image files to be archived
@@ -722,10 +719,6 @@ do_archive_images () {
         echo "${WORKDIR}/xlayers.conf" >>include
     fi
 
-    chmod +x "${WORKDIR}/bmaptool"
-    sed -i 's~#!/usr/bin/env python$~#!/usr/bin/env python3~g' "${WORKDIR}/bmaptool"
-    set -- "$@" "--transform=s,${WORKDIR}/bmaptool,${BINARY_INSTALL_PATH}/bmaptool,"
-    echo "${WORKDIR}/bmaptool" >>include
     release_tar "$@" --files-from=include -chf ${MACHINE}-${ARCHIVE_RELEASE_VERSION}.tar
 }
 
