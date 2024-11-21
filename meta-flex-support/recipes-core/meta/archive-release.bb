@@ -712,12 +712,6 @@ do_archive_images () {
         sed -i 's,^DISTRO =.*,DISTRO = "${DISTRO}",' local.conf.sample
     fi
 
-    pdk_version="${PDK_DISTRO_VERSION}"
-    if [ -n "$pdk_version" ]; then
-        echo >>local.conf.sample
-        echo "PDK_DISTRO_VERSION = \"$pdk_version\"" >>local.conf.sample
-    fi
-
     sed -n '/^BBLAYERS/{n; :start; /\\$/{n; b start}; /^ *"$/d; :done}; p' ${TEMPLATECONF}/bblayers.conf.sample >bblayers.conf.sample
     echo 'BBLAYERS = "\' >>bblayers.conf.sample
     bb_layers | while read path relpath name; do
