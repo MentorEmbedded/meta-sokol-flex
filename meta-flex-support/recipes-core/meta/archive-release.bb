@@ -94,14 +94,7 @@ BSPFILES_INSTALL_PATH = "${MACHINE}/${ARCHIVE_RELEASE_VERSION}"
 BINARY_INSTALL_PATH ?= "${BSPFILES_INSTALL_PATH}/binary"
 CONF_INSTALL_PATH ?= "${BSPFILES_INSTALL_PATH}/conf"
 
-# Used to include conf-notes.txt, local.conf.sample, and bblayers.conf.sample for this BSP
-TEMPLATECONF_STR ?= "${@(oe.utils.read_file('${TOPDIR}/conf/templateconf.cfg') or '${FILE_DIRNAME}/../../../conf').rstrip()}"
-TEMPLATECONF = "${@os.path.join('${COREBASE}', '${TEMPLATECONF_STR}')}"
-
-# In our `images` artifact, nclude bmaptool and, for qemu, a runqemu wrapper
-SRC_URI += "https://github.com/01org/bmap-tools/releases/download/v3.4/bmaptool;name=bmaptool"
-SRC_URI[bmaptool.md5sum] = "7bc226c2b15aff58af31e421fa381d34"
-SRC_URI[bmaptool.sha256sum] = "8cedbb7a525dd4026b6cafe11f496de11dbda0f0e76a5b4938d2687df67bab7f"
+# In our `images` artifact, include a runqemu wrapper for qemu
 SRC_URI:append:qemuall = " file://runqemu.in"
 
 # Image files to be archived
@@ -706,29 +699,7 @@ do_archive_images () {
         echo runqemu >>include
     fi
 
-    cp ${TEMPLATECONF}/conf-notes.txt .
-    sed 's,^MACHINE ??=.*,MACHINE ??= "${MACHINE}",' ${TEMPLATECONF}/local.conf.sample >local.conf.sample
-    if [ -n "${DISTRO}" ]; then
-        sed -i 's,^DISTRO =.*,DISTRO = "${DISTRO}",' local.conf.sample
-    fi
-
-    pdk_version="${PDK_DISTRO_VERSION}"
-    if [ -n "$pdk_version" ]; then
-        echo >>local.conf.sample
-        echo "PDK_DISTRO_VERSION = \"$pdk_version\"" >>local.conf.sample
-    fi
-
-    sed -n '/^BBLAYERS/{n; :start; /\\$/{n; b start}; /^ *"$/d; :done}; p' ${TEMPLATECONF}/bblayers.conf.sample >bblayers.conf.sample
-    echo 'BBLAYERS = "\' >>bblayers.conf.sample
-    bb_layers | while read path relpath name; do
-        printf '    $%s%s \\\n' '{FLEXDIR}/' "$relpath" >>bblayers.conf.sample
-    done
-    echo '"' >>bblayers.conf.sample
-
     set -- "$@" "--transform=s,$PWD/,${CONF_INSTALL_PATH}/,"
-    echo "$PWD/local.conf.sample" >>include
-    echo "$PWD/bblayers.conf.sample" >>include
-    echo "$PWD/conf-notes.txt" >>include
 
     if [ -e "${DEPLOY_DIR_IMAGE}/${RELEASE_IMAGE}-${MACHINE}${IMAGE_NAME_SUFFIX}.qemuboot.conf" ]; then
         cp "${DEPLOY_DIR_IMAGE}/${RELEASE_IMAGE}-${MACHINE}${IMAGE_NAME_SUFFIX}.qemuboot.conf" ${WORKDIR}/qemuboot.conf
@@ -748,10 +719,6 @@ do_archive_images () {
         echo "${WORKDIR}/xlayers.conf" >>include
     fi
 
-    chmod +x "${WORKDIR}/bmaptool"
-    sed -i 's~#!/usr/bin/env python$~#!/usr/bin/env python3~g' "${WORKDIR}/bmaptool"
-    set -- "$@" "--transform=s,${WORKDIR}/bmaptool,${BINARY_INSTALL_PATH}/bmaptool,"
-    echo "${WORKDIR}/bmaptool" >>include
     release_tar "$@" --files-from=include -chf ${MACHINE}-${ARCHIVE_RELEASE_VERSION}.tar
 }
 
