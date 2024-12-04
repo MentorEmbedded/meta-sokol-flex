@@ -1,0 +1,30 @@
+From 79297e208e8d9be2bfd59524150e5d97dd2a53d9 Mon Sep 17 00:00:00 2001
+From: Haseeb Ashraf <haseeb_ashraf@mentor.com>
+Date: Wed, 4 Dec 2024 10:33:54 +0500
+Subject: [PATCH 2/2] cfg/docker.scc: include bridge.scc for docker bridge
+ network
+
+dockerd is failing to load modules "bridge br_netfilter". Include
+bridge.scc as required for docker bridge network support.
+
+Upstream-Status: Pending
+
+Signed-off-by: Haseeb Ashraf <haseeb_ashraf@mentor.com>
+---
+ cfg/docker.scc | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/cfg/docker.scc b/cfg/docker.scc
+index e317456cb..4f1eba249 100644
+--- a/cfg/docker.scc
++++ b/cfg/docker.scc
+@@ -1,4 +1,6 @@
+ define KFEATURE_DESCRIPTION "Enable Features needed by docker in addition to LXC features"
+ define KFEATURE_COMPATIBILITY board
+ 
++include cfg/net/bridge.scc
++
+ kconf non-hardware docker.cfg
+-- 
+2.34.1
+
