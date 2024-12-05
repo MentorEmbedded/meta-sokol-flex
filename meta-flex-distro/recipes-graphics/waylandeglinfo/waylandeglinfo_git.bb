@@ -7,7 +7,10 @@ HOMEPAGE = "https://github.com/clopez/waylandeglinfo"
 BUGTRACKER = "https://github.com/clopez/waylandeglinfo/issues"
 
 SRCREV = "b295363ab4e858fe4cfb32ee4e71a177e939b691"
-SRC_URI = "git://github.com/clopez/waylandeglinfo.git;protocol=https;branch=master"
+SRC_URI = " \
+    git://github.com/clopez/waylandeglinfo.git;protocol=https;branch=master \
+    file://0001-waylandes2info-Try-higher-GL-ES-profiles.patch \
+"
 
 S = "${WORKDIR}/git"
 

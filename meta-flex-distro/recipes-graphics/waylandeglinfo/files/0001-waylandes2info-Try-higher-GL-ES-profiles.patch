@@ -1,0 +1,121 @@
+From 24da8d110fb5ee24cd894ea4bbfe809a08d92a28 Mon Sep 17 00:00:00 2001
+From: Ahsan Hussain <ahsan.hussain@siemens.com>
+Date: Thu, 5 Dec 2024 10:10:00 +0500
+Subject: [PATCH 1/1] waylandes2info: Try higher GL ES profiles
+
+This change tries for higher GL ES versions before creating an EGL
+context
+
+Upstream-Status: Pending
+
+Signed-off-by: Ahsan Hussain <ahsan.hussain@siemens.com>
+---
+diff --git a/waylandes2info.c b/waylandes2info.c
+index 65b8068..b055cd4 100644
+--- a/waylandes2info.c
++++ b/waylandes2info.c
+@@ -137,7 +137,7 @@ info(EGLDisplay egl_dpy)
+ 
+ 
+ static void
+-init_egl(struct display *display, EGLint es_ver)
++init_egl(struct display *display)
+ {
+ 	EGLint attribs[] = {
+ 		EGL_RENDERABLE_TYPE, 0x0,
+@@ -153,6 +153,7 @@ init_egl(struct display *display, EGLint es_ver)
+ 
+ 	EGLint major, minor, n = 0;
+ 	EGLBoolean ret;
++	int i;
+ 
+ 	display->egl.dpy = eglGetDisplay(display->display);
+ 	if (!display->egl.dpy) {
+@@ -172,24 +173,39 @@ init_egl(struct display *display, EGLint es_ver)
+ 		exit(1);
+ 	}
+ 
+-	if (es_ver == 1)
+-		attribs[1] = EGL_OPENGL_ES_BIT;
+-	else
+-		attribs[1] = EGL_OPENGL_ES2_BIT;
+-	ctx_attribs[1] = es_ver;
++	for (i = 3; i > 0; --i) {
++		EGLint es_ver = i;
++		printf("Trying with GLES version %d\n", es_ver);
+ 
+-	ret = eglChooseConfig(display->egl.dpy, attribs,
+-	                      &display->egl.conf, 1, &n);
+-	if (!ret || n == 0) {
+-		printf("Error: couldn't get an EGL visual config\n");
+-		exit(1);
++		if (es_ver == 3)
++			attribs[1] = EGL_OPENGL_ES3_BIT;
++		else if (es_ver == 2)
++			attribs[1] = EGL_OPENGL_ES2_BIT;
++		else
++			attribs[1] = EGL_OPENGL_ES_BIT;
++
++		ctx_attribs[1] = es_ver;
++
++		ret = eglChooseConfig(display->egl.dpy, attribs,
++							&display->egl.conf, 1, &n);
++		if (!ret || n == 0) {
++			printf("Error: couldn't get an EGL visual config\n");
++			continue;
++		}
++
++		display->egl.ctx = eglCreateContext(display->egl.dpy,
++							display->egl.conf,
++							EGL_NO_CONTEXT, ctx_attribs);
++		if (!display->egl.ctx) {
++			printf("Error: eglCreateContext failed for GLES version %d\n", es_ver);
++			continue;
++		} else {
++			break;
++		}
+ 	}
+ 
+-	display->egl.ctx = eglCreateContext(display->egl.dpy,
+-					    display->egl.conf,
+-					    EGL_NO_CONTEXT, ctx_attribs);
+ 	if (!display->egl.ctx) {
+-		printf("Error: eglCreateContext failed\n");
++		printf("Error: Failed to initialize EGL context for any OpenGL ES version\n");
+ 		exit(1);
+ 	}
+ }
+@@ -258,11 +274,6 @@ main(int argc, char *argv[])
+ {
+ 	struct display display = { 0 };
+ 	struct window window = { 0 };
+-	EGLint es_ver = 1;
+-
+-	/* decide the version from the executable's name */
+-	if (argc > 0 && argv[0] && strstr(argv[0], "es2"))
+-		es_ver = 2;
+ 
+ 	display.display = wl_display_connect(NULL);
+ 	if (!display.display) {
+@@ -272,16 +283,14 @@ main(int argc, char *argv[])
+ 	window.display = &display;
+ 
+ 	display.registry = wl_display_get_registry(display.display);
+-
+ 	wl_registry_add_listener(display.registry,
+-				       &registry_listener, &display);
+-
++	                               &registry_listener, &display);
+ 
+ 
+ 	wl_display_get_fd(display.display);//, event_mask_update, &display);
+ 	wl_display_dispatch(display.display);
+ 
+-	init_egl(&display, es_ver);
++	init_egl(&display);
+ 	init_egl_surface(&window);
+ 
+ 	info(display.egl.dpy);
+-- 
+2.43.0
+
