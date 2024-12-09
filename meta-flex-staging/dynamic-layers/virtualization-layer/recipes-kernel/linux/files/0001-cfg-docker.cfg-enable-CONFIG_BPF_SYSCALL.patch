@@ -1,0 +1,42 @@
+From fcb30c6faad9e44c96df5546342e63ce06810a6c Mon Sep 17 00:00:00 2001
+From: Haseeb Ashraf <haseeb_ashraf@mentor.com>
+Date: Wed, 4 Dec 2024 10:24:11 +0500
+Subject: [PATCH 1/2] cfg/docker.cfg: enable CONFIG_BPF_SYSCALL
+
+CONFIG_CGROUPS_BPF depends on CONFIG_BPF_SYSCALL. If the latter is
+not enabled in defconfig, then CONFIG_CGROUPS_BPF is not actually
+enabled and results in error:
+```
+docker: Error response from daemon:
+        failed to create task for container:
+        failed to create shim task:
+        OCI runtime create failed:
+        runc create failed:
+        unable to start container process:
+        error during container init:
+        error setting cgroup config for procHooks process:
+        bpf_prog_query(BPF_CGROUP_DEVICE) failed:
+        function not implemented: unknown.
+ERRO[0011] error waiting for container: context canceled
+```
+
+Upstream-Status: Pending
+
+Signed-off-by: Haseeb Ashraf <haseeb_ashraf@mentor.com>
+---
+ cfg/docker.cfg | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/cfg/docker.cfg b/cfg/docker.cfg
+index 4d8d7e04a..6bb25fd8a 100644
+--- a/cfg/docker.cfg
++++ b/cfg/docker.cfg
+@@ -12,4 +12,5 @@ CONFIG_NETFILTER_XT_MATCH_IPVS=m
+ 
+ CONFIG_OVERLAY_FS=y
+ 
++CONFIG_BPF_SYSCALL=y
+ CONFIG_CGROUP_BPF=y
+-- 
+2.34.1
+
