@@ -1,0 +1,32 @@
+From e3391d7b29b8ac47a3fb6639d33b84acccaaa531 Mon Sep 17 00:00:00 2001
+From: Ahsan Hussain <ahsan.hussain@siemens.com>
+Date: Tue, 10 Dec 2024 12:38:18 +0500
+Subject: [PATCH 1/1] CMakeLists.txt: Make paths in assimpTargets.cmake generic
+
+Updated CMakeLists.txt to ensure INTERFACE_LINK_LIBRARIES uses
+relative paths in assimpTargets.cmake file
+
+Upstream-Status: Inapproriate [OE-Specific]
+
+Signed-off-by: Ahsan Hussain <ahsan.hussain@siemens.com>
+---
+ CMakeLists.txt | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 75b160c6f..8321b77e6 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -845,3 +845,8 @@ if(WIN32)
+     ENDIF()
+   ENDIF()
+ ENDIF ()
++
++set_target_properties(assimp PROPERTIES
++  INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include;${_IMPORT_PREFIX}/include"
++  INTERFACE_LINK_LIBRARIES "$<$<NOT:$<CONFIG:DEBUG>>:${_IMPORT_PREFIX}/lib/libz.so>;$<$<CONFIG:DEBUG>:${_IMPORT_PREFIX}/lib/libz.so>;rt"
++)
+\ No newline at end of file
+-- 
+2.43.0
+
