@@ -13,8 +13,18 @@ packages="python39 \
           python3-setuptools \
           patch diffstat git bzip2 tar \
           gzip gawk chrpath wget cpio perl file which \
-          make gcc gcc-c++ rsync rpcgen \
+          rsync rpcgen \
           zstd lz4"
+
+if lsb_release -ds | grep -Pq '(?:Red Hat Enterprise|Rocky) Linux release 8'; then
+    # Following packages require sourcing their environment which is done through
+    # setup-environment script:
+    # - `source scl_source enable gcc-toolset-9`
+    # - `source scl_source enable make43`
+    packages+=" make43 gcc-toolset-9 scl-utils"
+else
+    packages+=" make gcc gcc-c++"
+fi
 
 set -e
 
@@ -30,13 +40,9 @@ fi
 # Enable required repo's to get install rpcgen package
 
 echo "Enabling any required repos"
-if grep -q "^Red Hat Enterprise Linux release 9" /etc/redhat-release 2>/dev/null; then
-    ARCH=$(/bin/arch)
-    subscription-manager repos --enable "codeready-builder-for-rhel-9-${ARCH}-rpms"
-elif grep -q "^Red Hat Enterprise Linux release 8" /etc/redhat-release 2>/dev/null; then
-    ARCH=$(/bin/arch)
-    subscription-manager repos --enable "codeready-builder-for-rhel-8-${ARCH}-rpms"
-elif grep -q "^Rocky Linux" /etc/redhat-release 2>/dev/null; then
+if [ `lsb_release -is` = 'RedHatEnterprise' ]; then
+    subscription-manager repos --enable "codeready-builder-for-rhel-`lsb_release -rs | cut -d. -f1`-`arch`-rpms"
+elif [ `lsb_release -is` = 'Rocky' ]; then
     dnf config-manager --set-enabled powertools
 fi
 
@@ -46,11 +52,8 @@ dnf install --assumeyes "$@" $packages || {
     exit 1
 }
 
-# Due to lower make and python version we are unable to make build succesful so installing required version and creating symbolic link.  
-
-if grep -q "^Red Hat Enterprise Linux release 8" /etc/redhat-release 2>/dev/nulli || grep -q "^Rocky Linux" /etc/redhat-release 2>/dev/null; then
-    dnf install --assumeyes make43
-    ln -sfn /opt/rh/make43/bin/make /usr/local/bin/make
+# Add symbolic link for the required version of python on following OS releases
+if lsb_release -ds | grep -Pq '(?:Red Hat Enterprise|Rocky) Linux release 8'; then
     ln -sfn /usr/bin/python3.9 /usr/local/bin/python3
 fi
 
