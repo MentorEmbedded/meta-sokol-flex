@@ -27,4 +27,4 @@ def get_generic_tune(d):
         tune = d.getVar('DEFAULTTUNE')
     return tune
 
-DEFAULTTUNE:flex-os := "${@get_generic_tune(d)}"
+DEFAULTTUNE:innexis-linux := "${@get_generic_tune(d)}"

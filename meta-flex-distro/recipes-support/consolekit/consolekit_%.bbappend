@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-FILESEXTRAPATHS:prepend:flex-os := "${THISDIR}/${PN}:"
+FILESEXTRAPATHS:prepend:innexis-linux := "${THISDIR}/${PN}:"
 
-SRC_URI:append:flex-os = " \
+SRC_URI:append:innexis-linux = " \
     file://0001-Ensure-filesystems-are-still-mounted-when-consolekit.patch \
 "

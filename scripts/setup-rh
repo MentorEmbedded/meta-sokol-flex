@@ -47,7 +47,7 @@ elif grep -Pq '^ID="rocky"' /etc/os-release; then
     dnf config-manager --set-enabled powertools
 fi
 
-echo "Installing packages required to build Flex OS"
+echo "Installing packages required to build Innexis Linux"
 dnf install --assumeyes "$@" $packages || {
     echo >&2 "Error installing our required packages, aborting"
     exit 1

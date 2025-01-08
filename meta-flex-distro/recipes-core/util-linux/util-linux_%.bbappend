@@ -2,4 +2,4 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-EXTRA_OECONF:append:class-native:flex-os = " --disable-schedutils"
+EXTRA_OECONF:append:class-native:innexis-linux = " --disable-schedutils"

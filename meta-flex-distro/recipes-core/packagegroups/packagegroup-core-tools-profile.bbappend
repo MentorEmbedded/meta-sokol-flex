@@ -3,7 +3,7 @@
 # ---------------------------------------------------------------------------------------------------------------------
 
 # Flex OS Flex does not support systemtap. Systemtap brings boost which takes lots of resources. So we do not need it.
-SYSTEMTAP:flex-os = ""
+SYSTEMTAP:innexis-linux = ""
 
 # Add perfetto to tools-profile for tracing
-RDEPENDS:${PN}:append:flex-os = " perfetto libperfetto"
+RDEPENDS:${PN}:append:innexis-linux = " perfetto libperfetto"

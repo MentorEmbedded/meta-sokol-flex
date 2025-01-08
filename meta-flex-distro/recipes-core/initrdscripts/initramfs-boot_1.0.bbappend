@@ -2,4 +2,4 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-FILESEXTRAPATHS:prepend:flex-os := "${THISDIR}/files:"
+FILESEXTRAPATHS:prepend:innexis-linux := "${THISDIR}/files:"

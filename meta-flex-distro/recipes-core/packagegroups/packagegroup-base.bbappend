@@ -2,4 +2,4 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-RDEPENDS:packagegroup-base-nfs:append:flex-os = " nfs-utils-client"
+RDEPENDS:packagegroup-base-nfs:append:innexis-linux = " nfs-utils-client"

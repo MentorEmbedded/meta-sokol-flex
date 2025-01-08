@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-PREMIRRORS:append:flex-os = " \
+PREMIRRORS:append:innexis-linux = " \
 git://sources.redhat.com/ git://sourceware.org/ \n\
 "
 
-MIRRORS:append:flex-os = "\
+MIRRORS:append:innexis-linux = "\
 ${KERNELORG_MIRROR}/ https://kernel.googlesource.com/ \n\
 ${KERNELORG_MIRROR}/ http://mirror.nexcess.net/kernel.org/ \n\
 ${KERNELORG_MIRROR}/ http://mirror.gbxs.net/pub/ \n\

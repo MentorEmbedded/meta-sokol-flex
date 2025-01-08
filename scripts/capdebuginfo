@@ -31,7 +31,7 @@ usage () {
    cat >&2 <<END
 
 Description:
-   Capture debug info from a Flex OS user's host such as host environment and project log files.
+   Capture debug info from a Innexis Linux user's host such as host environment and project log files.
    The Script runs only if environment of the shell is already set using setup-environment script.
 
 Modes of operation:
@@ -177,7 +177,7 @@ get_flexinstallinfo () {
    if [ -d "${HOMEDIR}"/.siemens ]; then
       cp -a "${HOMEDIR}"/.siemens/.registry "${__outputdir}"/host/siemens-registry
    else
-      echo -en "\\nNo Flex OS install info found!\\n" >> ${__output}
+      echo -en "\\nNo Innexis Linux install info found!\\n" >> ${__output}
    fi
 }
 

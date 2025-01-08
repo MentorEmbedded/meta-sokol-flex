@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-FILESEXTRAPATHS:prepend:flex-os := "${THISDIR}/${PN}:"
+FILESEXTRAPATHS:prepend:innexis-linux := "${THISDIR}/${PN}:"
 
-RDEPENDS:initramfs-module-lvm:append:flex-os = " lvm2"
-RRECOMMENDS:${PN}-base:append:flex-os = " initramfs-module-lvm"
+RDEPENDS:initramfs-module-lvm:append:innexis-linux = " lvm2"
+RRECOMMENDS:${PN}-base:append:innexis-linux = " initramfs-module-lvm"
