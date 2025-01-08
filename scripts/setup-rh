@@ -16,7 +16,7 @@ packages="python39 \
           rsync rpcgen \
           zstd lz4"
 
-if lsb_release -ds | grep -Pq '(?:Red Hat Enterprise|Rocky) Linux release 8'; then
+if grep -Pq '^ID="(?:rhel|rocky)"' /etc/os-release && grep -Pq '^VERSION_ID="8.*"' /etc/os-release; then
     # Following packages require sourcing their environment which is done through
     # setup-environment script:
     # - `source scl_source enable gcc-toolset-9`
@@ -40,9 +40,10 @@ fi
 # Enable required repo's to get install rpcgen package
 
 echo "Enabling any required repos"
-if [ `lsb_release -is` = 'RedHatEnterprise' ]; then
-    subscription-manager repos --enable "codeready-builder-for-rhel-`lsb_release -rs | cut -d. -f1`-`arch`-rpms"
-elif [ `lsb_release -is` = 'Rocky' ]; then
+if grep -Pq '^ID="rhel"' /etc/os-release; then
+    ver_id=`grep -Po '^VERSION_ID="\K[0-9]+(?=\.)' /etc/os-release`
+    subscription-manager repos --enable "codeready-builder-for-rhel-${ver_id}-`arch`-rpms"
+elif grep -Pq '^ID="rocky"' /etc/os-release; then
     dnf config-manager --set-enabled powertools
 fi
 
@@ -53,7 +54,7 @@ dnf install --assumeyes "$@" $packages || {
 }
 
 # Add symbolic link for the required version of python on following OS releases
-if lsb_release -ds | grep -Pq '(?:Red Hat Enterprise|Rocky) Linux release 8'; then
+if grep -Pq '^ID="(?:rhel|rocky)"' /etc/os-release && grep -Pq '^VERSION_ID="8.*"' /etc/os-release; then
     ln -sfn /usr/bin/python3.9 /usr/local/bin/python3
 fi
 

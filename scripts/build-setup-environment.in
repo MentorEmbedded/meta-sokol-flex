@@ -18,7 +18,7 @@ if [ -z "$OEINIT" ]; then
 else
     . "$OEINIT" "$BUILDDIR" "@BITBAKEDIR@"
     export BB_ENV_PASSTHROUGH_ADDITIONS="$BB_ENV_PASSTHROUGH_ADDITIONS GIT_SSL_CAINFO SALT_LICENSE_SERVER SALT_EXCLUDE_LICENSES SALT_INCLUDE_LICENSES SALT_LOGGING_DIR SALT_PKGINFO_FILE SALT_LICENSE_SOURCE WSL_INTEROP"
-    if lsb_release -ds | grep -Pq '(?:Red Hat Enterprise|Rocky) Linux release 8'; then
+    if grep -Pq '^ID="(?:rhel|rocky)"' /etc/os-release && grep -Pq '^VERSION_ID="8.*"' /etc/os-release; then
         # since gcc-toolset-9 also sets up its make (make42), so enable make43 after gcc-toolset-9
         . scl_source enable gcc-toolset-9
         . scl_source enable make43
