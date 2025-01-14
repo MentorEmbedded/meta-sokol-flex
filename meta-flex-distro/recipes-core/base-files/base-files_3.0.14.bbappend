@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-FILESEXTRAPATHS:prepend:flex-os := "${THISDIR}:"
+FILESEXTRAPATHS:prepend:innexis-linux := "${THISDIR}:"
 
-dirs755:append:flex-os = "\
+dirs755:append:innexis-linux = "\
     ${sysconfdir}/alternatives \
     ${localstatedir}/lib/alternatives \
 "

@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-FILESEXTRAPATHS:prepend:flex-os := "${THISDIR}/${PN}:"
-SRC_URI:prepend:flex-os = "file://0001-ftrace-Avoid-crashing-if-format-doesn-t-match-expect.patch "
+FILESEXTRAPATHS:prepend:innexis-linux := "${THISDIR}/${PN}:"
+SRC_URI:prepend:innexis-linux = "file://0001-ftrace-Avoid-crashing-if-format-doesn-t-match-expect.patch "
 
 # Remove build path references from debug symbols and avoid QA warnings
 # TODO: remove when upstream is updated

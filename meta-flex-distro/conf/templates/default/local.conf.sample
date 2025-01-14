@@ -2,8 +2,8 @@
 ## oe-core/meta/conf/local.conf.sample and
 ## oe-core/meta/conf/local.conf.sample.extended
 
-# Distro is set to Flex OS
-DISTRO = 'flex-os'
+# Distro is set to Innexis Linux
+DISTRO = 'innexis-linux'
 
 # The target machine for this build. Automatically set by setup-environment
 MACHINE ??= "qemux86"

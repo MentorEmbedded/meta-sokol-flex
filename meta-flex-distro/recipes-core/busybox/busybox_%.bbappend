@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-FILESEXTRAPATHS:prepend:flex-os := "${THISDIR}/busybox:"
+FILESEXTRAPATHS:prepend:innexis-linux := "${THISDIR}/busybox:"
 
 # fancy-head.cfg is enabled so we have head -c, which we need for our tracing
 # scripts with lttng
-SRC_URI:append:flex-os = "\
+SRC_URI:append:innexis-linux = "\
     file://setsid.cfg \
     file://fancy-head.cfg \
 	file://pidof.cfg \

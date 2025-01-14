@@ -16,7 +16,7 @@ IMAGE_FEATURES:append:feature-tracing = " tools-profile"
 
 # We want libgcc to always be available, even if nothing needs it, as its size
 # is minimal, and it's often needed by third party (or QA) binaries
-IMAGE_INSTALL:append:flex-os = " libgcc"
+IMAGE_INSTALL:append:innexis-linux = " libgcc"
 
 LICENSE = "MIT"
 

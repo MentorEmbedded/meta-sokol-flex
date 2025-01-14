@@ -15,7 +15,7 @@ IMAGE_LINGUAS = ""
 
 LICENSE = "MIT"
 
-IMAGE_FSTYPES:flex-os = "${INITRAMFS_FSTYPES}"
+IMAGE_FSTYPES:innexis-linux = "${INITRAMFS_FSTYPES}"
 inherit core-image
 
 IMAGE_ROOTFS_SIZE = "8192"

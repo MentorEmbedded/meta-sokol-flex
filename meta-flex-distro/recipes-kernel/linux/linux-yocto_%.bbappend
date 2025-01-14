@@ -5,7 +5,7 @@
 # Unpublished work. Copyright 2024 Siemens
 # ---------------------------------------------------------------------------------------------------------------------
 
-FILESEXTRAPATHS:prepend:flex-os := "${THISDIR}/${PN}:"
-SRC_URI:append:flex-os = " \
+FILESEXTRAPATHS:prepend:innexis-linux := "${THISDIR}/${PN}:"
+SRC_URI:append:innexis-linux = " \
 	${@bb.utils.contains('DISTRO_FEATURES', 'tracing', 'file://ftrace.cfg ', '', d)} \
 "

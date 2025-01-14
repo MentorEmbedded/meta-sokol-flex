@@ -2,4 +2,4 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-PARALLEL_MAKE:flex-os = "-j 4"
+PARALLEL_MAKE:innexis-linux = "-j 4"

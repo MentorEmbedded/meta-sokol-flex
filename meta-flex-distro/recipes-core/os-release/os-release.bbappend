@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-OS_RELEASE_FIELDS:flex-os = "PRETTY_NAME NAME VERSION_ID VERSION VERSION_CODENAME ID HOME_URL SUPPORT_URL BUG_REPORT_URL"
+OS_RELEASE_FIELDS:innexis-linux = "PRETTY_NAME NAME VERSION_ID VERSION VERSION_CODENAME ID HOME_URL SUPPORT_URL BUG_REPORT_URL"
 
-ID:flex-os = "flex-os"
-NAME:flex-os = "Flex OS"
-VERSION:flex-os = "${DISTRO_VERSION}${@' (%s)' % DISTRO_CODENAME if 'DISTRO_CODENAME' in d else ''}"
-VERSION_ID:flex-os = "${DISTRO_VERSION}"
-VERSION_CODENAME:flex-os = "${@'(%s)' % DISTRO_CODENAME if 'DISTRO_CODENAME' in d else ''}"
-PRETTY_NAME:flex-os = "${DISTRO_NAME} ${VERSION}"
+ID:innexis-linux = "innexis-linux"
+NAME:innexis-linux = "Innexis Linux"
+VERSION:innexis-linux = "${DISTRO_VERSION}${@' (%s)' % DISTRO_CODENAME if 'DISTRO_CODENAME' in d else ''}"
+VERSION_ID:innexis-linux = "${DISTRO_VERSION}"
+VERSION_CODENAME:innexis-linux = "${@'(%s)' % DISTRO_CODENAME if 'DISTRO_CODENAME' in d else ''}"
+PRETTY_NAME:innexis-linux = "${DISTRO_NAME} ${VERSION}"
