@@ -24,7 +24,7 @@ REQUIRED_DISTRO_FEATURES = "vulkan"
 
 S = "${WORKDIR}/git"
 
-SRCREV = "ab6e6f34077722d5ae33f6bd40b18ef9c0e99a15"
+SRCREV = "2bf2ca7f1623db7ad7840a4dd626444d11830815"
 
 SRC_URI = "\
     git://github.com/vkmark/vkmark.git;protocol=https;branch=master \
