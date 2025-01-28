@@ -8,22 +8,23 @@ Need to prepend PKG_CONFIG_SYSROOT_DIR to the dir path for cross compilation
 Upstream-Status: Inappropriate [OE-specific]
 
 Signed-off-by: Neena Busireddy <neenareddy.busireddy@nxp.com>
+Signed-off-by: Ahsan Hussain <ahsan.hussain@siemens.com>
 
 ---
- src/meson.build | 3 +++
- 1 file changed, 3 insertions(+)
+ src/meson.build | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
 
 diff --git a/src/meson.build b/src/meson.build
-index 35813c5..9032706 100644
+index 99f64d9..db2f28a 100644
 --- a/src/meson.build
 +++ b/src/meson.build
-@@ -6,6 +6,9 @@ vulkan_hpp = join_paths([
-     'vulkan.hpp'
-     ])
+@@ -1,7 +1,8 @@
+ prog_python = find_program('python3')
  
 +pkgconf_sysroot = run_command(prog_python, '-c', 'import os; print(os.environ.get("PKG_CONFIG_SYSROOT_DIR"))').stdout().strip()
-+vulkan_hpp = pkgconf_sysroot + vulkan_hpp
-+
- format_map_gen_h = custom_target(
-     'format_map_gen.h',
-     output: 'format_map_gen.h',
+ vk_xml = join_paths([
+-    vulkan_dep.get_pkgconfig_variable('prefix'),
++    pkgconf_sysroot + vulkan_dep.get_pkgconfig_variable('prefix'),
+     'share', 'vulkan', 'registry',
+     'vk.xml'
+     ])

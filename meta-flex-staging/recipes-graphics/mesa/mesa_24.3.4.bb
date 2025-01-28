@@ -1,8 +1,6 @@
 # ---------------------------------------------------------------------------------------------------------------------
-# SPDX-License-Identifier: GPL-2.0
+# SPDX-License-Identifier: MIT
 # ---------------------------------------------------------------------------------------------------------------------
 
-FILESEXTRAPATHS:prepend:innexis-linux := "${THISDIR}/${PN}:"
-SRC_URI:append:innexis-linux = " \
-	${@bb.utils.contains('DISTRO_FEATURES', 'tracing', 'file://ftrace.cfg ', '', d)} \
-"
+require ${BPN}.inc
+
