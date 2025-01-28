@@ -1,8 +1,5 @@
-# This material contains trade secrets or otherwise confidential information owned by Siemens Industry Software Inc.
-# or its affiliates (collectively, "Siemens"), or its licensors. Access to and use of this information is strictly limited
-# as set forth in the Customer's applicable agreements with Siemens.
 # ---------------------------------------------------------------------------------------------------------------------
-# Unpublished work. Copyright 2024 Siemens
+# SPDX-License-Identifier: GPL-2.0
 # ---------------------------------------------------------------------------------------------------------------------
 
 FILESEXTRAPATHS:prepend:innexis-linux := "${THISDIR}/${PN}:"
