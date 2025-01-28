@@ -155,7 +155,7 @@ PACKAGECONFIG[vc4] = ""
 PACKAGECONFIG[v3d] = ""
 PACKAGECONFIG[zink] = ""
 
-GALLIUMDRIVERS = "softpipe,llvmpipe"
+GALLIUMDRIVERS = "softpipe"
 # gallium swrast was found to crash Xorg on startup in x32 qemu
 # iris requires libclc from meta-clang in Mesa 24.3; remove it
 # as we don't care about the mesa-native build
@@ -179,6 +179,7 @@ GALLIUMDRIVERS_LLVM:append:x86 = ",svga"
 GALLIUMDRIVERS_LLVM:append:x86-64 = ",svga"
 # i686 is a 32 bit override for mesa-native
 GALLIUMDRIVERS_LLVM:append:i686 = ",svga"
+GALLIUMDRIVERS_LLVM:append = ",llvmpipe"
 
 PACKAGECONFIG[r600] = ""
 PACKAGECONFIG[virgl] = ""
