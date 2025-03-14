@@ -407,3 +407,6 @@ done
 
 PACKAGECONFIG[gfxstream] = ",,libaemu"
 VULKAN_DRIVERS:append ="${@bb.utils.contains('PACKAGECONFIG', 'gfxstream', ',gfxstream-experimental', '', d)}"
+
+PACKAGECONFIG[venus] = ""
+VULKAN_DRIVERS:append ="${@bb.utils.contains('PACKAGECONFIG', 'venus', ',virtio', '', d)}"
