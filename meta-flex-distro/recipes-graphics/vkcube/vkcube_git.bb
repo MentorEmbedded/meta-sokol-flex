@@ -40,5 +40,5 @@ EXTRA_OEMESON += "--buildtype release"
 
 do_install() {
     install -d ${D}${bindir}
-    cp vkcube ${D}${bindir}
+    cp vkcube ${D}${bindir}/vkcube-headless
 }
