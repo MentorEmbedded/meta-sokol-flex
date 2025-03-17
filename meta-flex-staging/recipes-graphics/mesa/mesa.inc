@@ -33,7 +33,7 @@ SRC_URI = "https://mesa.freedesktop.org/archive/mesa-${PV}.tar.xz \
            file://0009-llvmpipe-improve-aniso-filtering.patch \
 "
 
-SRC_URI[sha256sum] = "e641ae27191d387599219694560d221b7feaa91c900bcec46bf444218ed66025"
+SRC_URI[sha256sum] = "49eb55ba5acccae91deb566573a6a73144a0f39014be1982d78c21c5b6b0bb3f"
 
 UPSTREAM_CHECK_GITTAGREGEX = "mesa-(?P<pver>\d+(\.\d+)+)"
 
@@ -156,7 +156,7 @@ PACKAGECONFIG[egl] = "-Degl=enabled, -Degl=disabled"
 
 # "opencl" requires libclc from meta-clang and spirv-tools from OE-Core
 OPENCL_NATIVE = "${@bb.utils.contains('PACKAGECONFIG', 'freedreno', '-Dopencl-native=true', '', d)}"
-PACKAGECONFIG[opencl] = "-Dgallium-opencl=icd -Dopencl-spirv=true ${OPENCL_NATIVE},-Dgallium-opencl=disabled -Dopencl-spirv=false,libclc spirv-tools python3-ply-native"
+PACKAGECONFIG[opencl] = "-Dgallium-opencl=icd ${OPENCL_NATIVE},-Dgallium-opencl=disabled,libclc python3-ply-native"
 
 PACKAGECONFIG[broadcom] = ""
 PACKAGECONFIG[etnaviv] = ""
@@ -406,7 +406,7 @@ done
 }
 
 PACKAGECONFIG[gfxstream] = ",,libaemu"
-VULKAN_DRIVERS:append ="${@bb.utils.contains('PACKAGECONFIG', 'gfxstream', ',gfxstream-experimental', '', d)}"
+VULKAN_DRIVERS:append ="${@bb.utils.contains('PACKAGECONFIG', 'gfxstream', ',gfxstream', '', d)}"
 
 PACKAGECONFIG[venus] = ""
 VULKAN_DRIVERS:append ="${@bb.utils.contains('PACKAGECONFIG', 'venus', ',virtio', '', d)}"
