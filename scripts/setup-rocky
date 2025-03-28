@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0
 # ---------------------------------------------------------------------------------------------------------------------
 #
-# Copyright 2024 Siemens
+# Copyright 2025 Siemens
 #
 # This file is licensed under the terms of the GNU General Public License
 # version 2.  This program  is licensed "as is" without any warranty of any
@@ -16,7 +16,7 @@ packages="python39 \
           rsync rpcgen \
           zstd lz4"
 
-if grep -Pq '^ID="(?:rhel|rocky)"' /etc/os-release && grep -Pq '^VERSION_ID="8.*"' /etc/os-release; then
+if grep -Pq '^VERSION_ID="8.*"' /etc/os-release; then
     # Following packages require sourcing their environment which is done through
     # setup-environment script:
     # - `source scl_source enable gcc-toolset-9`
@@ -37,15 +37,14 @@ if [ "$(id -u)" != "0" ]; then
     exec sudo "$0" "$@"
 fi
 
-# Enable required repo's to get install rpcgen package
+if ! grep -Pq '^ID="rocky"' /etc/os-release; then
+    echo "This script is for Rocky OS only, aborting"
+    exit 1
+fi
 
 echo "Enabling any required repos"
-if grep -Pq '^ID="rhel"' /etc/os-release; then
-    ver_id=`grep -Po '^VERSION_ID="\K[0-9]+(?=\.)' /etc/os-release`
-    subscription-manager repos --enable "codeready-builder-for-rhel-${ver_id}-`arch`-rpms"
-elif grep -Pq '^ID="rocky"' /etc/os-release; then
-    dnf config-manager --set-enabled powertools
-fi
+# Enable repo required for rpcgen package
+dnf config-manager --set-enabled powertools
 
 echo "Installing packages required to build Innexis Linux"
 dnf install --assumeyes "$@" $packages || {
@@ -53,8 +52,8 @@ dnf install --assumeyes "$@" $packages || {
     exit 1
 }
 
-# Add symbolic link for the required version of python on following OS releases
-if grep -Pq '^ID="(?:rhel|rocky)"' /etc/os-release && grep -Pq '^VERSION_ID="8.*"' /etc/os-release; then
+# Add symbolic link for the required version of python on Rocky-8
+if grep -Pq '^VERSION_ID="8.*"' /etc/os-release; then
     ln -sfn /usr/bin/python3.9 /usr/local/bin/python3
 fi
 
