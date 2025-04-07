@@ -42,4 +42,21 @@ fi
 echo "Generating the en_US.UTF-8 locale"
 $SUDO locale-gen en_US.UTF-8
 
+# Workaround for ubuntu-24 issue [Allow bitbake to create user namespace](https://bugs.launchpad.net/ubuntu/+source/apparmor/+bug/2056555)
+if grep -Pq '^VERSION_ID=(?:|")24\.' /etc/os-release; then
+    echo "Adding Bitbake's AppArmor Profile to associate it with User Namespace profile"
+    echo "NOTE: This is a workaround for Ubuntu bug (https://bugs.launchpad.net/ubuntu/+source/apparmor/+bug/2056555)"
+    echo "which gives unconfined access to bitbake binary. You may review the AppArmor Profile for Bitbake available"
+    echo "here: /etc/apparmor.d/bitbake"
+    $SUDO tee /etc/apparmor.d/bitbake > /dev/null <<'EOF'
+abi <abi/4.0>,
+include <tunables/global>
+profile bitbake /**/bitbake/bin/bitbake flags=(unconfined) {
+        userns,
+}
+EOF
+    # Reload AppArmor Profile
+    $SUDO apparmor_parser -r /etc/apparmor.d/bitbake
+fi
+
 echo "Setup complete"
