@@ -16,7 +16,7 @@ packages="python39 \
           rsync rpcgen \
           zstd lz4"
 
-if grep -Pq '^VERSION_ID="8.*"' /etc/os-release; then
+if grep -Pq '^VERSION_ID=(?:|")8\.' /etc/os-release; then
     # Following packages require sourcing their environment which is done through
     # setup-environment script:
     # - `source scl_source enable gcc-toolset-9`
@@ -37,7 +37,7 @@ if [ "$(id -u)" != "0" ]; then
     exec sudo "$0" "$@"
 fi
 
-if ! grep -Pq '^ID="rocky"' /etc/os-release; then
+if ! grep -Pq '^ID=(?:|")rocky(?:|")' /etc/os-release; then
     echo "This script is for Rocky OS only, aborting"
     exit 1
 fi
@@ -53,7 +53,7 @@ dnf install --assumeyes "$@" $packages || {
 }
 
 # Add symbolic link for the required version of python on Rocky-8
-if grep -Pq '^VERSION_ID="8.*"' /etc/os-release; then
+if grep -Pq '^VERSION_ID=(?:|")8\.' /etc/os-release; then
     ln -sfn /usr/bin/python3.9 /usr/local/bin/python3
 fi
 
