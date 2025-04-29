@@ -18,7 +18,7 @@ LIC_FILES_CHKSUM = "file://docs/license.rst;md5=ffe678546d4337b732cfd12262e6af11
 
 PE = "2"
 
-SRC_URI = "https://mesa.freedesktop.org/archive/mesa-${PV}.tar.xz \
+SRC_URI = "git://gitlab.freedesktop.org/mesa/mesa.git;protocol=https;branch=25.0 \
            file://0001-meson-misdetects-64bit-atomics-on-mips-clang.patch \
            file://0001-util-add-c-guards-to-u_mm.h.patch \
            file://0002-gfxstream-nuke-android-base-SubAllocator.patch \
@@ -33,9 +33,8 @@ SRC_URI = "https://mesa.freedesktop.org/archive/mesa-${PV}.tar.xz \
            file://0009-llvmpipe-improve-aniso-filtering.patch \
 "
 
-SRC_URI[sha256sum] = "49eb55ba5acccae91deb566573a6a73144a0f39014be1982d78c21c5b6b0bb3f"
-
-UPSTREAM_CHECK_GITTAGREGEX = "mesa-(?P<pver>\d+(\.\d+)+)"
+SRCREV = "mesa-25.0.1"
+S = "${WORKDIR}/git"
 
 #because we cannot rely on the fact that all apps will use pkgconfig,
 #make eglplatform.h independent of MESA_EGL_NO_X11_HEADER
