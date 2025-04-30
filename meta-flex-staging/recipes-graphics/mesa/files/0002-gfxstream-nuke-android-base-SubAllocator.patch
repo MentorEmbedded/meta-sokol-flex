@@ -1,0 +1,127 @@
+From 9e6058e84b1c1d21eb828d35a211380929e43e38 Mon Sep 17 00:00:00 2001
+From: Gurchetan Singh <gurchetansingh@google.com>
+Date: Fri, 1 Nov 2024 16:26:49 -0700
+Subject: [PATCH 2/2] gfxstream: nuke android::base::SubAllocator
+
+Use u_mm, one less dependency on libaemu v0.1.2
+
+Reviewed-by: Marcin Radomski <dextero@google.com>
+Part-of: <https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/32015>
+
+Upstream-Status: Backport [https://gitlab.freedesktop.org/mesa/mesa/-/commit/dd5244e6ac1366e4cd464e8b7548e0fc14ca281d]
+---
+ .../HostVisibleMemoryVirtualization.cpp       | 29 ++++++++++---------
+ .../HostVisibleMemoryVirtualization.h         | 11 +++----
+ 2 files changed, 22 insertions(+), 18 deletions(-)
+
+diff --git a/src/gfxstream/guest/vulkan_enc/HostVisibleMemoryVirtualization.cpp b/src/gfxstream/guest/vulkan_enc/HostVisibleMemoryVirtualization.cpp
+index 68a8fb20380..eed6f9a96a7 100644
+--- a/src/gfxstream/guest/vulkan_enc/HostVisibleMemoryVirtualization.cpp
++++ b/src/gfxstream/guest/vulkan_enc/HostVisibleMemoryVirtualization.cpp
+@@ -9,9 +9,6 @@
+ #include "ResourceTracker.h"
+ #include "Resources.h"
+ #include "VkEncoder.h"
+-#include "aemu/base/SubAllocator.h"
+-
+-using android::base::SubAllocator;
+ 
+ namespace gfxstream {
+ namespace vk {
+@@ -23,38 +20,44 @@ bool isHostVisible(const VkPhysicalDeviceMemoryProperties* memoryProps, uint32_t
+ CoherentMemory::CoherentMemory(VirtGpuResourceMappingPtr blobMapping, uint64_t size,
+                                VkDevice device, VkDeviceMemory memory)
+     : mSize(size), mBlobMapping(blobMapping), mDevice(device), mMemory(memory) {
+-    mAllocator =
+-        std::make_unique<android::base::SubAllocator>(blobMapping->asRawPtr(), mSize, 4096);
++    mHeap = u_mmInit(0, kHostVisibleHeapSize);
++    mBaseAddr = blobMapping->asRawPtr();
+ }
+ 
+ #if defined(__ANDROID__)
+ CoherentMemory::CoherentMemory(GoldfishAddressSpaceBlockPtr block, uint64_t gpuAddr, uint64_t size,
+                                VkDevice device, VkDeviceMemory memory)
+     : mSize(size), mBlock(block), mDevice(device), mMemory(memory) {
+-    void* address = block->mmap(gpuAddr);
+-    mAllocator = std::make_unique<android::base::SubAllocator>(address, mSize, kLargestPageSize);
++    mHeap = u_mmInit(0, kHostVisibleHeapSize);
++    mBaseAddr = (uint8_t*)block->mmap(gpuAddr);
+ }
+ #endif  // defined(__ANDROID__)
+ 
+ CoherentMemory::~CoherentMemory() {
+     ResourceTracker::getThreadLocalEncoder()->vkFreeMemorySyncGOOGLE(mDevice, mMemory, nullptr,
+                                                                      false);
++    u_mmDestroy(mHeap);
+ }
+ 
+ VkDeviceMemory CoherentMemory::getDeviceMemory() const { return mMemory; }
+ 
+ bool CoherentMemory::subAllocate(uint64_t size, uint8_t** ptr, uint64_t& offset) {
+-    auto address = mAllocator->alloc(size);
+-    if (!address) return false;
++    auto block = u_mmAllocMem(mHeap, (int)size, 0, 0);
++    if (!block) return false;
+ 
+-    *ptr = (uint8_t*)address;
+-    offset = mAllocator->getOffset(address);
++    *ptr = mBaseAddr + block->ofs;
+     return true;
+ }
+ 
+ bool CoherentMemory::release(uint8_t* ptr) {
+-    mAllocator->free(ptr);
+-    return true;
++    int offset = ptr - mBaseAddr;
++    auto block = u_mmFindBlock(mHeap, offset);
++    if (block) {
++        u_mmFreeMem(block);
++        return true;
++    }
++
++    return false;
+ }
+ 
+ }  // namespace vk
+diff --git a/src/gfxstream/guest/vulkan_enc/HostVisibleMemoryVirtualization.h b/src/gfxstream/guest/vulkan_enc/HostVisibleMemoryVirtualization.h
+index ac3c46490c2..c71abf2309f 100644
+--- a/src/gfxstream/guest/vulkan_enc/HostVisibleMemoryVirtualization.h
++++ b/src/gfxstream/guest/vulkan_enc/HostVisibleMemoryVirtualization.h
+@@ -7,8 +7,8 @@
+ #include <vulkan/vulkan.h>
+ 
+ #include "VirtGpu.h"
+-#include "aemu/base/SubAllocator.h"
+ #include "goldfish_address_space.h"
++#include "util/u_mm.h"
+ 
+ constexpr uint64_t kMegaByte = 1048576;
+ 
+@@ -27,7 +27,6 @@ namespace vk {
+ bool isHostVisible(const VkPhysicalDeviceMemoryProperties* memoryProps, uint32_t index);
+ 
+ using GoldfishAddressSpaceBlockPtr = std::shared_ptr<GoldfishAddressSpaceBlock>;
+-using SubAllocatorPtr = std::unique_ptr<android::base::SubAllocator>;
+ 
+ class CoherentMemory {
+    public:
+@@ -51,11 +50,13 @@ class CoherentMemory {
+     void operator=(CoherentMemory const&);
+ 
+     uint64_t mSize;
+-    VirtGpuResourceMappingPtr mBlobMapping = nullptr;
+-    GoldfishAddressSpaceBlockPtr mBlock = nullptr;
++    VirtGpuResourceMappingPtr mBlobMapping;
++    GoldfishAddressSpaceBlockPtr mBlock;
+     VkDevice mDevice;
+     VkDeviceMemory mMemory;
+-    SubAllocatorPtr mAllocator;
++
++    uint8_t* mBaseAddr = nullptr;
++    struct mem_block* mHeap = nullptr;
+ };
+ 
+ using CoherentMemoryPtr = std::shared_ptr<CoherentMemory>;
+-- 
+2.34.1
+

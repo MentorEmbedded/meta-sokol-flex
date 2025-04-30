@@ -20,6 +20,8 @@ PE = "2"
 
 SRC_URI = "https://mesa.freedesktop.org/archive/mesa-${PV}.tar.xz \
            file://0001-meson-misdetects-64bit-atomics-on-mips-clang.patch \
+           file://0001-util-add-c-guards-to-u_mm.h.patch \
+           file://0002-gfxstream-nuke-android-base-SubAllocator.patch \
 "
 
 SRC_URI[sha256sum] = "e641ae27191d387599219694560d221b7feaa91c900bcec46bf444218ed66025"

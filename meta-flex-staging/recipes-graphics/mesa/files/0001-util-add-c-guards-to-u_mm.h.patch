@@ -1,0 +1,45 @@
+From 45edcc1c6ae54e30e15b987f214e9428f2e6e7aa Mon Sep 17 00:00:00 2001
+From: Gurchetan Singh <gurchetansingh@google.com>
+Date: Fri, 1 Nov 2024 14:53:39 -0700
+Subject: [PATCH 1/2] util: add c++ guards to u_mm.h
+
+Needed for gfxstream.
+
+Reviewed-by: Marcin Radomski <dextero@google.com>
+Part-of: <https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/32015>
+
+Upstream-Status: Backport [https://gitlab.freedesktop.org/mesa/mesa/-/commit/5d299a0bd44caa66ccde65369e743c8ba0a9b7cf]
+---
+ src/util/u_mm.h | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/src/util/u_mm.h b/src/util/u_mm.h
+index 66886febf4c..62f234f987a 100644
+--- a/src/util/u_mm.h
++++ b/src/util/u_mm.h
+@@ -29,10 +29,12 @@
+  * heaps, etc.
+  */
+ 
+-
+ #ifndef _U_MM_H_
+ #define _U_MM_H_
+ 
++#ifdef __cplusplus
++extern "C" {
++#endif
+ 
+ struct mem_block {
+    struct mem_block *next, *prev;
+@@ -88,4 +90,8 @@ extern void u_mmDestroy(struct mem_block *mmInit);
+  */
+ extern void u_mmDumpMemInfo(const struct mem_block *mmInit);
+ 
++#ifdef __cplusplus
++}
++#endif
++
+ #endif
+-- 
+2.34.1
+
