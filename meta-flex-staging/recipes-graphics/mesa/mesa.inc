@@ -22,6 +22,15 @@ SRC_URI = "https://mesa.freedesktop.org/archive/mesa-${PV}.tar.xz \
            file://0001-meson-misdetects-64bit-atomics-on-mips-clang.patch \
            file://0001-util-add-c-guards-to-u_mm.h.patch \
            file://0002-gfxstream-nuke-android-base-SubAllocator.patch \
+           file://0001-llvmpipe-Disable-anisotropic-filtering-for-explicit-.patch \
+           file://0002-llvmpipe-Use-a-simpler-and-faster-AF-implementation.patch \
+           file://0003-llvmpipe-Remove-unused-AF-code.patch \
+           file://0004-llvmpipe-Move-max_anisotropy-to-static-sampler-state.patch \
+           file://0005-llvmpipe-disable-anisotropic-filtering-for-non-2D-te.patch \
+           file://0006-llvmpipe-Fix-half-pixel-sample-offset-with-AF.patch \
+           file://0007-llvmpipe-Avoid-a-crash-when-using-5-coords-with-AF.patch \
+           file://0008-llvmpipe-Fix-overflow-issues-calculating-loop-iterat.patch \
+           file://0009-llvmpipe-improve-aniso-filtering.patch \
 "
 
 SRC_URI[sha256sum] = "e641ae27191d387599219694560d221b7feaa91c900bcec46bf444218ed66025"

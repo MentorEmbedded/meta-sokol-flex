@@ -1,0 +1,263 @@
+From 9aee5834af55430b3909d9016be8ea7ea76d131c Mon Sep 17 00:00:00 2001
+From: Konstantin Seurer <konstantin.seurer@gmail.com>
+Date: Wed, 13 Nov 2024 21:53:02 +0100
+Subject: [PATCH 4/9] llvmpipe: Move max_anisotropy to static sampler state
+
+Applications typically use one globak max_anisotropy value.
+Moving it to static state should save a could of instructions.
+
+Reviewed-by: Aleksi Sapon <aleksi.sapon@autodesk.com>
+Reviewed-by: Adam Jackson <ajax@redhat.com>
+Part-of: <https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/31748>
+
+Upstream-Status: Backport [https://gitlab.freedesktop.org/mesa/mesa/-/commit/378fd38e1da44e3a565a49a1195388542a7b54ca]
+---
+ src/gallium/auxiliary/draw/draw_llvm.c         |  1 -
+ .../auxiliary/gallivm/lp_bld_jit_types.c       |  8 +-------
+ .../auxiliary/gallivm/lp_bld_jit_types.h       |  2 --
+ src/gallium/auxiliary/gallivm/lp_bld_sample.c  | 18 +++++++++---------
+ src/gallium/auxiliary/gallivm/lp_bld_sample.h  | 10 +---------
+ .../auxiliary/gallivm/lp_bld_sample_soa.c      | 12 ++----------
+ src/gallium/drivers/llvmpipe/lp_jit.c          |  1 -
+ src/gallium/drivers/llvmpipe/lp_state_cs.c     |  1 -
+ 8 files changed, 13 insertions(+), 40 deletions(-)
+
+diff --git a/src/gallium/auxiliary/draw/draw_llvm.c b/src/gallium/auxiliary/draw/draw_llvm.c
+index 40ed7cd0bc4..59220f6eaaa 100644
+--- a/src/gallium/auxiliary/draw/draw_llvm.c
++++ b/src/gallium/auxiliary/draw/draw_llvm.c
+@@ -2223,7 +2223,6 @@ draw_llvm_set_sampler_state(struct draw_context *draw,
+          jit_sam->min_lod = s->min_lod;
+          jit_sam->max_lod = s->max_lod;
+          jit_sam->lod_bias = s->lod_bias;
+-         jit_sam->max_aniso = s->max_anisotropy;
+          COPY_4V(jit_sam->border_color, s->border_color.f);
+       }
+    }
+diff --git a/src/gallium/auxiliary/gallivm/lp_bld_jit_types.c b/src/gallium/auxiliary/gallivm/lp_bld_jit_types.c
+index 22d5266d219..8e2651dd404 100644
+--- a/src/gallium/auxiliary/gallivm/lp_bld_jit_types.c
++++ b/src/gallium/auxiliary/gallivm/lp_bld_jit_types.c
+@@ -201,8 +201,7 @@ lp_build_create_jit_sampler_type(struct gallivm_state *gallivm)
+    LLVMTypeRef elem_types[LP_JIT_SAMPLER_NUM_FIELDS];
+    elem_types[LP_JIT_SAMPLER_MIN_LOD] =
+    elem_types[LP_JIT_SAMPLER_MAX_LOD] =
+-   elem_types[LP_JIT_SAMPLER_LOD_BIAS] =
+-   elem_types[LP_JIT_SAMPLER_MAX_ANISO] = LLVMFloatTypeInContext(lc);
++   elem_types[LP_JIT_SAMPLER_LOD_BIAS] = LLVMFloatTypeInContext(lc);
+    elem_types[LP_JIT_SAMPLER_BORDER_COLOR] =
+       LLVMArrayType(LLVMFloatTypeInContext(lc), 4);
+ 
+@@ -221,9 +220,6 @@ lp_build_create_jit_sampler_type(struct gallivm_state *gallivm)
+    LP_CHECK_MEMBER_OFFSET(struct lp_jit_sampler, border_color,
+                           gallivm->target, sampler_type,
+                           LP_JIT_SAMPLER_BORDER_COLOR);
+-   LP_CHECK_MEMBER_OFFSET(struct lp_jit_sampler, max_aniso,
+-                          gallivm->target, sampler_type,
+-                          LP_JIT_SAMPLER_MAX_ANISO);
+    LP_CHECK_STRUCT_SIZE(struct lp_jit_sampler,
+                         gallivm->target, sampler_type);
+    return sampler_type;
+@@ -566,7 +562,6 @@ LP_BUILD_LLVM_SAMPLER_MEMBER(min_lod,    LP_JIT_SAMPLER_MIN_LOD, true)
+ LP_BUILD_LLVM_SAMPLER_MEMBER(max_lod,    LP_JIT_SAMPLER_MAX_LOD, true)
+ LP_BUILD_LLVM_SAMPLER_MEMBER(lod_bias,   LP_JIT_SAMPLER_LOD_BIAS, true)
+ LP_BUILD_LLVM_SAMPLER_MEMBER(border_color, LP_JIT_SAMPLER_BORDER_COLOR, false)
+-LP_BUILD_LLVM_SAMPLER_MEMBER(max_aniso, LP_JIT_SAMPLER_MAX_ANISO, true)
+ 
+ /**
+  * Fetch the specified member of the lp_jit_image structure.
+@@ -703,7 +698,6 @@ lp_build_jit_fill_sampler_dynamic_state(struct lp_sampler_dynamic_state *state)
+    state->max_lod = lp_build_llvm_sampler_max_lod;
+    state->lod_bias = lp_build_llvm_sampler_lod_bias;
+    state->border_color = lp_build_llvm_sampler_border_color;
+-   state->max_aniso = lp_build_llvm_sampler_max_aniso;
+ }
+ 
+ void
+diff --git a/src/gallium/auxiliary/gallivm/lp_bld_jit_types.h b/src/gallium/auxiliary/gallivm/lp_bld_jit_types.h
+index b8d3c897dfa..249950d5ec1 100644
+--- a/src/gallium/auxiliary/gallivm/lp_bld_jit_types.h
++++ b/src/gallium/auxiliary/gallivm/lp_bld_jit_types.h
+@@ -101,7 +101,6 @@ struct lp_jit_sampler
+    float max_lod;
+    float lod_bias;
+    float border_color[4];
+-   float max_aniso;
+ };
+ 
+ enum {
+@@ -109,7 +108,6 @@ enum {
+    LP_JIT_SAMPLER_MAX_LOD,
+    LP_JIT_SAMPLER_LOD_BIAS,
+    LP_JIT_SAMPLER_BORDER_COLOR,
+-   LP_JIT_SAMPLER_MAX_ANISO,
+    LP_JIT_SAMPLER_NUM_FIELDS  /* number of fields above */
+ };
+ 
+diff --git a/src/gallium/auxiliary/gallivm/lp_bld_sample.c b/src/gallium/auxiliary/gallivm/lp_bld_sample.c
+index 1f0e5818fe0..4fafb5d3be6 100644
+--- a/src/gallium/auxiliary/gallivm/lp_bld_sample.c
++++ b/src/gallium/auxiliary/gallivm/lp_bld_sample.c
+@@ -220,7 +220,8 @@ lp_sampler_static_sampler_state(struct lp_static_sampler_state *state,
+    state->min_mip_filter    = sampler->min_mip_filter;
+    state->seamless_cube_map = sampler->seamless_cube_map;
+    state->reduction_mode    = sampler->reduction_mode;
+-   state->aniso = sampler->max_anisotropy > 1.0f;
++   if (sampler->max_anisotropy > 1)
++      state->aniso = sampler->max_anisotropy;
+ 
+    if (sampler->max_lod > 0.0f) {
+       state->max_lod_pos = 1;
+@@ -267,8 +268,7 @@ static LLVMValueRef
+ lp_build_pmin(struct lp_build_sample_context *bld,
+               LLVMValueRef first_level,
+               LLVMValueRef s,
+-              LLVMValueRef t,
+-              LLVMValueRef max_aniso)
++              LLVMValueRef t)
+ {
+    struct gallivm_state *gallivm = bld->gallivm;
+    LLVMBuilderRef builder = bld->gallivm->builder;
+@@ -287,8 +287,6 @@ lp_build_pmin(struct lp_build_sample_context *bld,
+ 
+    int_size = lp_build_minify(int_size_bld, bld->int_size, first_level, true);
+    float_size = lp_build_int_to_float(float_size_bld, int_size);
+-   max_aniso = lp_build_broadcast_scalar(coord_bld, max_aniso);
+-   max_aniso = lp_build_mul(coord_bld, max_aniso, max_aniso);
+ 
+    static const unsigned char swizzle01[] = { /* no-op swizzle */
+       0, 1,
+@@ -329,12 +327,15 @@ lp_build_pmin(struct lp_build_sample_context *bld,
+    LLVMValueRef pmax2 = lp_build_max(coord_bld, px2, py2);
+    LLVMValueRef pmin2 = lp_build_min(coord_bld, px2, py2);
+ 
+-   LLVMValueRef temp = lp_build_mul(coord_bld, pmin2, max_aniso);
++   LLVMValueRef temp = lp_build_mul(
++      coord_bld, pmin2, lp_build_const_vec(gallivm, coord_bld->type, bld->static_sampler_state->aniso *
++                                           bld->static_sampler_state->aniso));
+ 
+    LLVMValueRef comp = lp_build_compare(gallivm, coord_bld->type, PIPE_FUNC_GREATER,
+                                         pmax2, temp);
+ 
+-   LLVMValueRef pmin2_alt = lp_build_div(coord_bld, pmax2, max_aniso);
++   LLVMValueRef pmin2_alt = lp_build_div(coord_bld, pmax2,
++      lp_build_const_vec(gallivm, coord_bld->type, bld->static_sampler_state->aniso));
+ 
+    pmin2 = lp_build_select(coord_bld, comp, pmin2_alt, pmin2);
+ 
+@@ -815,7 +816,6 @@ lp_build_lod_selector(struct lp_build_sample_context *bld,
+                       LLVMValueRef lod_bias, /* optional */
+                       LLVMValueRef explicit_lod, /* optional */
+                       enum pipe_tex_mipfilter mip_filter,
+-                      LLVMValueRef max_aniso,
+                       LLVMValueRef *out_lod,
+                       LLVMValueRef *out_lod_ipart,
+                       LLVMValueRef *out_lod_fpart,
+@@ -871,7 +871,7 @@ lp_build_lod_selector(struct lp_build_sample_context *bld,
+ 
+          if (bld->static_sampler_state->aniso &&
+              !explicit_lod) {
+-            rho = lp_build_pmin(bld, first_level, s, t, max_aniso);
++            rho = lp_build_pmin(bld, first_level, s, t);
+             rho_squared = true;
+          } else {
+             rho = lp_build_rho(bld, first_level, s, t, r, derivs);
+diff --git a/src/gallium/auxiliary/gallivm/lp_bld_sample.h b/src/gallium/auxiliary/gallivm/lp_bld_sample.h
+index 6c5ac2f9ffe..f6612e03a0e 100644
+--- a/src/gallium/auxiliary/gallivm/lp_bld_sample.h
++++ b/src/gallium/auxiliary/gallivm/lp_bld_sample.h
+@@ -230,7 +230,7 @@ struct lp_static_sampler_state
+    unsigned apply_min_lod:1;  /**< min_lod > 0 ? */
+    unsigned apply_max_lod:1;  /**< max_lod < last_level ? */
+    unsigned seamless_cube_map:1;
+-   unsigned aniso:1;
++   unsigned aniso:5;
+    unsigned reduction_mode:2;
+ };
+ 
+@@ -359,13 +359,6 @@ struct lp_sampler_dynamic_state
+                    LLVMValueRef resources_ptr,
+                    unsigned sampler_unit);
+ 
+-   /** Obtain maximum anisotropy */
+-   LLVMValueRef
+-   (*max_aniso)(struct gallivm_state *gallivm,
+-                LLVMTypeRef resources_type,
+-                LLVMValueRef resources_ptr,
+-                unsigned sampler_unit);
+-
+    /**
+     * Obtain texture cache (returns ptr to lp_build_format_cache).
+     *
+@@ -646,7 +639,6 @@ lp_build_lod_selector(struct lp_build_sample_context *bld,
+                       LLVMValueRef lod_bias, /* optional */
+                       LLVMValueRef explicit_lod, /* optional */
+                       enum pipe_tex_mipfilter mip_filter,
+-                      LLVMValueRef max_aniso,
+                       LLVMValueRef *out_lod,
+                       LLVMValueRef *out_lod_ipart,
+                       LLVMValueRef *out_lod_fpart,
+diff --git a/src/gallium/auxiliary/gallivm/lp_bld_sample_soa.c b/src/gallium/auxiliary/gallivm/lp_bld_sample_soa.c
+index 4b3212b19f1..69ec61e9a52 100644
+--- a/src/gallium/auxiliary/gallivm/lp_bld_sample_soa.c
++++ b/src/gallium/auxiliary/gallivm/lp_bld_sample_soa.c
+@@ -2243,7 +2243,7 @@ lp_build_sample_aniso(struct lp_build_sample_context *bld,
+ 
+    /* Number of samples used for averaging. */
+    LLVMValueRef N = lp_build_iceil(coord_bld, lp_build_max(coord_bld, rho_x, rho_y));
+-   N = lp_build_min(int_coord_bld, N, lp_build_const_int_vec(gallivm, int_coord_bld->type, 16));
++   N = lp_build_min(int_coord_bld, N, lp_build_const_int_vec(gallivm, int_coord_bld->type, bld->static_sampler_state->aniso));
+    LLVMValueRef wave_max_N = NULL;
+    for (uint32_t i = 0; i < coord_bld->type.length; i++) {
+       LLVMValueRef invocation_N = LLVMBuildExtractElement(builder, N, lp_build_const_int32(gallivm, i), "");
+@@ -2424,14 +2424,6 @@ lp_build_sample_common(struct lp_build_sample_context *bld,
+     */
+    if (min_filter != mag_filter ||
+        mip_filter != PIPE_TEX_MIPFILTER_NONE || is_lodq) {
+-      LLVMValueRef max_aniso = NULL;
+-
+-      if (aniso)
+-         max_aniso = bld->dynamic_state->max_aniso(bld->gallivm,
+-                                                   bld->resources_type,
+-                                                   bld->resources_ptr,
+-                                                   sampler_index);
+-
+       /* Need to compute lod either to choose mipmap levels or to
+        * distinguish between minification/magnification with one mipmap level.
+        */
+@@ -2441,7 +2433,7 @@ lp_build_sample_common(struct lp_build_sample_context *bld,
+                             first_level_vec,
+                             coords[0], coords[1], coords[2],
+                             derivs, lod_bias, explicit_lod,
+-                            mip_filter, max_aniso, lod,
++                            mip_filter, lod,
+                             &lod_ipart, lod_fpart, lod_pos_or_zero);
+       if (is_lodq) {
+          last_level = lp_build_sub(&bld->int_bld, last_level, first_level);
+diff --git a/src/gallium/drivers/llvmpipe/lp_jit.c b/src/gallium/drivers/llvmpipe/lp_jit.c
+index bc52a0d5b56..851772f7be2 100644
+--- a/src/gallium/drivers/llvmpipe/lp_jit.c
++++ b/src/gallium/drivers/llvmpipe/lp_jit.c
+@@ -546,7 +546,6 @@ lp_jit_sampler_from_pipe(struct lp_jit_sampler *jit, const struct pipe_sampler_s
+    jit->min_lod = sampler->min_lod;
+    jit->max_lod = sampler->max_lod;
+    jit->lod_bias = sampler->lod_bias;
+-   jit->max_aniso = sampler->max_anisotropy;
+    COPY_4V(jit->border_color, sampler->border_color.f);
+ }
+ 
+diff --git a/src/gallium/drivers/llvmpipe/lp_state_cs.c b/src/gallium/drivers/llvmpipe/lp_state_cs.c
+index 1ca054f4d2e..fe2fa0f319b 100644
+--- a/src/gallium/drivers/llvmpipe/lp_state_cs.c
++++ b/src/gallium/drivers/llvmpipe/lp_state_cs.c
+@@ -1470,7 +1470,6 @@ lp_csctx_set_sampler_state(struct lp_cs_context *csctx,
+          jit_sam->min_lod = sampler->min_lod;
+          jit_sam->max_lod = sampler->max_lod;
+          jit_sam->lod_bias = sampler->lod_bias;
+-         jit_sam->max_aniso = sampler->max_anisotropy;
+          COPY_4V(jit_sam->border_color, sampler->border_color.f);
+       }
+    }
+-- 
+2.34.1
+

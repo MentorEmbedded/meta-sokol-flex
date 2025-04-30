@@ -1,0 +1,56 @@
+From a0bfe8ad9235743bf1d75f37185f822f71f07407 Mon Sep 17 00:00:00 2001
+From: Roland Scheidegger <roland.scheidegger@broadcom.com>
+Date: Thu, 13 Feb 2025 23:38:48 +0100
+Subject: [PATCH 8/9] llvmpipe: Fix overflow issues calculating loop
+ iterations for aniso
+
+iceil can return bogus (negative) values in case there's an overflow
+(or a NaN). This would then take forever to run due to a couple billion
+loop iterations.
+Use unsigned minimum instead which will clamp iterations to max aniso
+(not sure if that makes more sense than clamping negative values to 0,
+probably doesn't really matter).
+
+Fixes: 350a0fe63298 ("llvmpipe: Use a simpler and faster AF implementation")
+
+Reviewed-by: Brian Paul <brian.paul@broadcom.com>
+Reviewed-by: Konstantin Seurer <konstantin.seurer@gmail.com>
+Part-of: <https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/33537>
+
+Upstream-Status: Backport [https://gitlab.freedesktop.org/mesa/mesa/-/commit/24076eb3f9d1518710df7b534c863dc85668a5fe]
+---
+ src/gallium/auxiliary/gallivm/lp_bld_sample_soa.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/src/gallium/auxiliary/gallivm/lp_bld_sample_soa.c b/src/gallium/auxiliary/gallivm/lp_bld_sample_soa.c
+index 9c7ed784e34..89e6388f0c6 100644
+--- a/src/gallium/auxiliary/gallivm/lp_bld_sample_soa.c
++++ b/src/gallium/auxiliary/gallivm/lp_bld_sample_soa.c
+@@ -2198,9 +2198,13 @@ lp_build_sample_aniso(struct lp_build_sample_context *bld,
+    LLVMBuilderRef builder = gallivm->builder;
+    struct lp_build_context *coord_bld = &bld->coord_bld;
+    struct lp_build_context *int_coord_bld = &bld->int_coord_bld;
++   struct lp_build_context uint_coord_bld;
++
+    LLVMValueRef size0, row_stride0_vec, img_stride0_vec;
+    LLVMValueRef data_ptr0, mipoff0 = NULL;
+ 
++   lp_build_context_init(&uint_coord_bld, gallivm, lp_uint_type(int_coord_bld->type));
++
+    lp_build_mipmap_level_sizes(bld, ilevel0,
+                                &size0,
+                                &row_stride0_vec, &img_stride0_vec);
+@@ -2243,7 +2247,9 @@ lp_build_sample_aniso(struct lp_build_sample_context *bld,
+ 
+    /* Number of samples used for averaging. */
+    LLVMValueRef N = lp_build_iceil(coord_bld, lp_build_max(coord_bld, rho_x, rho_y));
+-   N = lp_build_min(int_coord_bld, N, lp_build_const_int_vec(gallivm, int_coord_bld->type, bld->static_sampler_state->aniso));
++
++   /* Use uint min so in case of NaNs/overflows loop iterations are clamped to max aniso */
++   N = lp_build_min(&uint_coord_bld, N, lp_build_const_int_vec(gallivm, int_coord_bld->type, bld->static_sampler_state->aniso));
+    LLVMValueRef wave_max_N = NULL;
+    for (uint32_t i = 0; i < coord_bld->type.length; i++) {
+       LLVMValueRef invocation_N = LLVMBuildExtractElement(builder, N, lp_build_const_int32(gallivm, i), "");
+-- 
+2.34.1
+
