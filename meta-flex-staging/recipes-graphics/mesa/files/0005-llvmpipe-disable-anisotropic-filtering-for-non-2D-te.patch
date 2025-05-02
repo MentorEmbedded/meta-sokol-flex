@@ -1,0 +1,48 @@
+From 8acc11cd83c715bd49f7ce383b3baa05b96630c8 Mon Sep 17 00:00:00 2001
+From: Aleksi Sapon <aleksi.sapon@autodesk.com>
+Date: Fri, 17 Jan 2025 16:16:13 -0500
+Subject: [PATCH 5/9] llvmpipe: disable anisotropic filtering for non-2D
+ textures
+
+Reviewed-by: Konstantin Seurer <konstantin.seurer@gmail.com>
+Reviewed-by: Roland Scheidegger <roland.scheidegger@broadcom.com>
+Part-of: <https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/33103>
+
+Upstream-Status: Backport [https://gitlab.freedesktop.org/mesa/mesa/-/commit/43ff387aa62edf747d1728606f0fa137877df60c]
+---
+ src/gallium/auxiliary/gallivm/lp_bld_sample_soa.c | 4 ++++
+ src/gallium/drivers/llvmpipe/lp_texture_handle.c  | 3 ---
+ 2 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/src/gallium/auxiliary/gallivm/lp_bld_sample_soa.c b/src/gallium/auxiliary/gallivm/lp_bld_sample_soa.c
+index 69ec61e9a52..c0a1a140415 100644
+--- a/src/gallium/auxiliary/gallivm/lp_bld_sample_soa.c
++++ b/src/gallium/auxiliary/gallivm/lp_bld_sample_soa.c
+@@ -3207,6 +3207,10 @@ lp_build_sample_soa_code(struct gallivm_state *gallivm,
+       return;
+    }
+ 
++   if (texture_dims(target) != 2) {
++      derived_sampler_state.aniso = 0;
++   }
++
+    assert(type.floating);
+ 
+    /* Setup our build context */
+diff --git a/src/gallium/drivers/llvmpipe/lp_texture_handle.c b/src/gallium/drivers/llvmpipe/lp_texture_handle.c
+index 4f68d87b785..c6accb190b4 100644
+--- a/src/gallium/drivers/llvmpipe/lp_texture_handle.c
++++ b/src/gallium/drivers/llvmpipe/lp_texture_handle.c
+@@ -440,9 +440,6 @@ compile_sample_function(struct llvmpipe_context *ctx, struct lp_static_texture_s
+          supported = false;
+ 
+       if (sampler->aniso) {
+-         if (texture_dims(texture->target) != 2)
+-            supported = false;
+-
+          if (util_format_is_pure_integer(texture->format))
+             supported = false;
+       }
+-- 
+2.34.1
+

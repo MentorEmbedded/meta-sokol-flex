@@ -1,0 +1,37 @@
+From 23a52bb96b2c950d738f9b533f36131ad5f0d49c Mon Sep 17 00:00:00 2001
+From: Konstantin Seurer <konstantin.seurer@gmail.com>
+Date: Mon, 13 Jan 2025 19:51:33 +0100
+Subject: [PATCH 7/9] llvmpipe: Avoid a crash when using 5 coords with AF
+
+Acked-by: Mike Blumenkrantz <michael.blumenkrantz@gmail.com>
+Part-of: <https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/32935>
+
+Upstream-Status: Backport [https://gitlab.freedesktop.org/mesa/mesa/-/commit/6701806cd1f97eb22e23a10ea9440935fd437178]
+---
+ src/gallium/auxiliary/gallivm/lp_bld_sample_soa.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/src/gallium/auxiliary/gallivm/lp_bld_sample_soa.c b/src/gallium/auxiliary/gallivm/lp_bld_sample_soa.c
+index 50f96544da1..9c7ed784e34 100644
+--- a/src/gallium/auxiliary/gallivm/lp_bld_sample_soa.c
++++ b/src/gallium/auxiliary/gallivm/lp_bld_sample_soa.c
+@@ -2283,12 +2283,13 @@ lp_build_sample_aniso(struct lp_build_sample_context *bld,
+       LLVMValueRef u_offset = lp_build_mul(coord_bld, float_k, dudk);
+       LLVMValueRef v_offset = lp_build_mul(coord_bld, float_k, dvdk);
+ 
+-      LLVMValueRef sample_coords[4] = {
++      LLVMValueRef sample_coords[5] = {
+          lp_build_add(coord_bld, coords[0], u_offset),
+          lp_build_add(coord_bld, coords[1], v_offset),
+-         coords[2],
+-         coords[3],
+       };
++      for (uint32_t i = 2; i < ARRAY_SIZE(sample_coords); i++)
++         sample_coords[i] = coords[i];
++
+ 
+       if (bld->static_texture_state->target == PIPE_TEXTURE_CUBE ||
+           bld->static_texture_state->target == PIPE_TEXTURE_CUBE_ARRAY) {
+-- 
+2.34.1
+
