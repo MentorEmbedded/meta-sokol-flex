@@ -100,9 +100,11 @@ SRC_URI:append:qemuall = " file://runqemu.in"
 # Image files to be archived
 IMAGE_BASENAME = "${RELEASE_IMAGE}"
 EXTRA_IMAGES_ARCHIVE_RELEASE ?= ""
+KERNEL_DEVICETREE_ARCHIVE_RELEASE ?= ""
 DEPLOY_IMAGES ?= "\
     ${@' '.join('${IMAGE_LINK_NAME}.%s' % ext for ext in d.getVar('IMAGE_EXTENSIONS').split())} \
     ${EXTRA_IMAGES_ARCHIVE_RELEASE} \
+    ${KERNEL_DEVICETREE_ARCHIVE_RELEASE} \
 "
 DEPLOY_IMAGES:append:qemuall = "${@' ' + d.getVar('KERNEL_IMAGETYPE') if 'wic' not in d.getVar('IMAGE_EXTENSIONS') else ''}"
 DEPLOY_IMAGES[doc] = "List of files from DEPLOY_DIR_IMAGE which will be archived"
