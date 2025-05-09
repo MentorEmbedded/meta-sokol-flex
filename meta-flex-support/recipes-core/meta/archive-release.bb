@@ -84,7 +84,7 @@ def flex_get_remotes(subdir, d):
 
 # Files for the script artifact
 FILESEXTRAPATHS:append = ":${@':'.join('%s/../scripts/release:%s/../scripts' % (l, l) for l in '${BBPATH}'.split(':'))}"
-FLEX_SCRIPTS_FILES = "flex-checkout setup-flex setup-workspace setup-ubuntu setup-rocky setup-debian"
+FLEX_SCRIPTS_FILES = "flex-checkout setup-flex setup-workspace setup-ubuntu setup-rocky"
 SRC_URI += "${@' '.join('file://%s' % s for s in d.getVar('FLEX_SCRIPTS_FILES').split())}"
 # }}}1
 
@@ -100,9 +100,11 @@ SRC_URI:append:qemuall = " file://runqemu.in"
 # Image files to be archived
 IMAGE_BASENAME = "${RELEASE_IMAGE}"
 EXTRA_IMAGES_ARCHIVE_RELEASE ?= ""
+KERNEL_DEVICETREE_ARCHIVE_RELEASE ?= ""
 DEPLOY_IMAGES ?= "\
     ${@' '.join('${IMAGE_LINK_NAME}.%s' % ext for ext in d.getVar('IMAGE_EXTENSIONS').split())} \
     ${EXTRA_IMAGES_ARCHIVE_RELEASE} \
+    ${KERNEL_DEVICETREE_ARCHIVE_RELEASE} \
 "
 DEPLOY_IMAGES:append:qemuall = "${@' ' + d.getVar('KERNEL_IMAGETYPE') if 'wic' not in d.getVar('IMAGE_EXTENSIONS') else ''}"
 DEPLOY_IMAGES[doc] = "List of files from DEPLOY_DIR_IMAGE which will be archived"
