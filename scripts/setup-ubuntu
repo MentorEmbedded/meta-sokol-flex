@@ -36,7 +36,6 @@ $SUDO apt-get -y install $PKGS
 if [ "$(uname -m)" = "x86_64" ]; then
     $SUDO dpkg --add-architecture i386
     $SUDO apt-get -y install libc6-dev-i386
-    $SUDO apt-get -y install libncurses5:i386
 fi
 
 echo "Generating the en_US.UTF-8 locale"
