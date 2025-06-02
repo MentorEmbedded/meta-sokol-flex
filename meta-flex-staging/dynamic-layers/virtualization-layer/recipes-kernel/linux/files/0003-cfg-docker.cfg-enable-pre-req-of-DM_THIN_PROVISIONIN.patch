@@ -1,0 +1,33 @@
+From 02e51eec46fa40bc6c47faca2f61d3fab50d3487 Mon Sep 17 00:00:00 2001
+From: Haseeb Ashraf <haseeb_ashraf@mentor.com>
+Date: Mon, 2 Jun 2025 13:08:07 +0500
+Subject: [PATCH 1/1] cfg/docker.cfg: enable pre-req of DM_THIN_PROVISIONING
+
+CONFIG_MD and CONFIG_BLK_DEV_DM are pre-requisite of
+CONFIG_DM_THIN_PROVISIONING.
+
+JIRA-ID: SB-24462
+
+Upstream-Status: Pending
+
+Signed-off-by: Haseeb Ashraf <haseeb_ashraf@mentor.com>
+---
+ cfg/docker.cfg | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/cfg/docker.cfg b/cfg/docker.cfg
+index 4d8d7e04..55917239 100644
+--- a/cfg/docker.cfg
++++ b/cfg/docker.cfg
+@@ -3,6 +3,8 @@ CONFIG_IP_NF_FILTER=m
+ CONFIG_NF_NAT=m
+ CONFIG_NF_CONNTRACK=y
+ 
++CONFIG_MD=y
++CONFIG_BLK_DEV_DM=m
+ CONFIG_DM_THIN_PROVISIONING=m
+ 
+ 
+-- 
+2.34.1
+
