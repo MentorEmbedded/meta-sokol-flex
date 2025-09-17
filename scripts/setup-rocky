@@ -37,14 +37,14 @@ if [ "$(id -u)" != "0" ]; then
     exec sudo "$0" "$@"
 fi
 
-if ! grep -Pq '^ID=(?:|")rocky(?:|")' /etc/os-release; then
-    echo "This script is for Rocky OS only, aborting"
-    exit 1
+if grep -Pq '^ID=(?:|")rocky(?:|")' /etc/os-release; then
+    echo "Enabling any required repos"
+    
+    if grep -Pq '^VERSION_ID=(?:|")8\.' /etc/os-release; then
+        # Enable repo required for rpcgen package
+        dnf config-manager --set-enabled powertools
+    fi
 fi
-
-echo "Enabling any required repos"
-# Enable repo required for rpcgen package
-dnf config-manager --set-enabled powertools
 
 echo "Installing packages required to build Innexis Linux"
 dnf install --assumeyes "$@" $packages || {
