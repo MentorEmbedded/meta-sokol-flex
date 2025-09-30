@@ -9,9 +9,13 @@ DEPENDS += "python3-pycryptodome-native"
 do_install() {
     #install TA devkit
     install -d ${D}${includedir}/optee/export-user_ta/
+    mkdir -p ${D}${nonarch_base_libdir}/optee_armtz/
+
     for f in ${B}/export-ta_${OPTEE_ARCH}/* ; do
         cp -aR $f ${D}${includedir}/optee/export-user_ta/
     done
+
+    install -D -p -m0444 ${B}/ta/*/*.ta ${D}${nonarch_base_libdir}/optee_armtz/
 }
 
 do_deploy() {

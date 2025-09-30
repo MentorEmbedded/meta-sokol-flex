@@ -4,7 +4,7 @@ DEPENDS += "dtc-native"
 
 FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
 
-SRCREV = "18b424c23aa5a798dfe2e4d20b4bde3919dc4e99"
+SRCREV = "0919de0f7c79ad35ad3c8ace5f823ad1344b4716"
 SRC_URI += " \
     file://0003-optee-enable-clang-support.patch \
    "
