@@ -1,0 +1,34 @@
+From de511f6c1d29727faa6a53ea82486c114deeb41b Mon Sep 17 00:00:00 2001
+From: "Arsalan H. Awan" <arsalan.awan@siemens.com>
+Date: Mon, 18 Aug 2025 16:20:04 +0000
+Subject: [PATCH] fix qemu runtime error
+
+I0818 15:52:19.797895 2336900 SharedLibrary.cpp:64] SharedLibrary::open for [libvulkan.so]
+I0818 15:52:19.797926 2336900 SharedLibrary.cpp:75] SharedLibrary::open for [libvulkan.so]: not found in map, open for the first time
+I0818 15:52:19.797930 2336900 SharedLibrary.cpp:186] SharedLibrary::open for [libvulkan.so] (posix): begin
+I0818 15:52:19.797935 2336900 SharedLibrary.cpp:244] SharedLibrary::open for [libvulkan.so] (posix,linux): call dlopen on [libvulkan.so]
+I0818 15:52:19.798316 2336900 SharedLibrary.cpp:262] SharedLibrary::open succeeded for [libvulkan.so].
+I0818 15:52:19.798321 2336900 VulkanDispatch.cpp:136] Added library: libvulkan.so
+Accessing graphics agents before injecting them.
+2336900 Segmentation fault
+
+Signed-off-by: Arsalan H. Awan <arsalan.awan@siemens.com>
+---
+ host/meson.build | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/host/meson.build b/host/meson.build
+index 362af0a23..f26b5719b 100644
+--- a/host/meson.build
++++ b/host/meson.build
+@@ -99,7 +99,7 @@ if use_auto
+   use_magma = host_machine.system() == 'linux'
+ endif
+ 
+-gfxstream_host_args += '-DGFXSTREAM_MESON_BUILD=1'
++#gfxstream_host_args += '-DGFXSTREAM_MESON_BUILD=1'
+ gfxstream_host_args += '-DGFXSTREAM_ENABLE_HOST_GLES=@0@'.format(use_gles ? '1' : '0')
+ 
+ if use_magma
+-- 
+2.39.5

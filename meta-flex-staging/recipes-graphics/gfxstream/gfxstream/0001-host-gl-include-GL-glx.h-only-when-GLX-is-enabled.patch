@@ -1,0 +1,43 @@
+From a65f748edf19d9d6ecb2c8d5fb8b0abcaab4d0a1 Mon Sep 17 00:00:00 2001
+From: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+Date: Wed, 13 May 2026 13:05:52 +0500
+Subject: [PATCH 1/1] host/gl: include GL/glx.h only when GLX is enabled
+
+Signed-off-by: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+---
+ host/gl/glestranslator/GLcommon/GLDispatch.cpp | 2 ++
+ host/gl/glestranslator/GLcommon/meson.build    | 4 ++++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/host/gl/glestranslator/GLcommon/GLDispatch.cpp b/host/gl/glestranslator/GLcommon/GLDispatch.cpp
+index 9068f9c83..ff99012d3 100644
+--- a/host/gl/glestranslator/GLcommon/GLDispatch.cpp
++++ b/host/gl/glestranslator/GLcommon/GLDispatch.cpp
+@@ -23,7 +23,9 @@
+ 
+ 
+ #ifdef __linux__
++#ifdef ENABLE_GLX
+ #include <GL/glx.h>
++#endif
+ #elif defined(WIN32)
+ #include <windows.h>
+ #endif
+diff --git a/host/gl/glestranslator/GLcommon/meson.build b/host/gl/glestranslator/GLcommon/meson.build
+index d1bf29ca2..37abcf894 100644
+--- a/host/gl/glestranslator/GLcommon/meson.build
++++ b/host/gl/glestranslator/GLcommon/meson.build
+@@ -1,6 +1,10 @@
+ # Copyright 2023 Android Open Source Project
+ # SPDX-License-Identifier: MIT
+ 
++if get_option('glx') != 'disabled'
++  gfxstream_host_args += ['-DENABLE_GLX']
++endif
++
+ files_lib_gl_common = files(
+   'rgtc.cpp',
+   'FramebufferData.cpp',
+-- 
+2.34.1
+
