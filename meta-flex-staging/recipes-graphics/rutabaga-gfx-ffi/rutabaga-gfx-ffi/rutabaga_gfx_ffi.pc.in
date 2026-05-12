@@ -1,0 +1,8 @@
+includedir=@includedir@
+libdir=@libdir@
+
+Name: rutabaga_gfx_ffi
+Description: C FFI bindings to Rutabaga VGI
+Version: @version@
+Libs: -L${libdir} -lrutabaga_gfx_ffi
+Cflags: -I${includedir}
