@@ -1,0 +1,142 @@
+From a65f748edf19d9d6ecb2c8d5fb8b0abcaab4d0a1 Mon Sep 17 00:00:00 2001
+From: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+Date: Wed, 13 May 2026 13:05:52 +0500
+Subject: [PATCH 1/1] host: remove hard dependency on x11
+
+Upstream-Status: Inappropriate [custom implementation]
+
+Signed-off-by: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+---
+ host/gl/glestranslator/GLcommon/GLDispatch.cpp | 2 ++
+ host/gl/glestranslator/GLcommon/meson.build    | 4 ++++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/host/gl/glestranslator/common/gl_dispatch.cpp b/host/gl/glestranslator/common/gl_dispatch.cpp
+index f2b9f4225..47ca23ab9 100644
+--- a/host/gl/glestranslator/common/gl_dispatch.cpp
++++ b/host/gl/glestranslator/common/gl_dispatch.cpp
+@@ -22,7 +22,9 @@
+ #include "gfxstream/common/logging.h"
+ 
+ #ifdef __linux__
++#ifdef ENABLE_GLX
+ #include <GL/glx.h>
++#endif
+ #elif defined(WIN32)
+ #include <windows.h>
+ #endif
+diff --git a/host/gl/glestranslator/common/meson.build b/host/gl/glestranslator/common/meson.build
+index 2f8c060e4..8b713f6d0 100644
+--- a/host/gl/glestranslator/common/meson.build
++++ b/host/gl/glestranslator/common/meson.build
+@@ -1,6 +1,10 @@
+ # Copyright 2023 Android Open Source Project
+ # SPDX-License-Identifier: Apache-2.0
+ 
++if get_option('glx') != 'disabled'
++  gfxstream_host_args += ['-DENABLE_GLX']
++endif
++
+ files_lib_gl_common = files(
+   'rgtc.cpp',
+   'framebuffer_data.cpp',
+diff --git a/host/meson.build b/host/meson.build
+index 54b7c49fc..a6d3192cc 100644
+--- a/host/meson.build
++++ b/host/meson.build
+@@ -131,7 +131,7 @@ elif host_machine.system() == 'darwin'
+ elif host_machine.system() == 'windows'
+   files_lib_gfxstream_backend += files('native_sub_window_win32.cpp')
+ elif host_machine.system() == 'linux' and use_gles
+-  files_lib_gfxstream_backend += files('native_sub_window_x11.cpp')
++  files_lib_gfxstream_backend += files('native_sub_window_wayland.cpp')
+ elif host_machine.system() == 'qnx'
+   files_lib_gfxstream_backend += files(
+     'platform_helper_qnx.cpp',
+@@ -152,7 +152,7 @@ elif host_machine.system() == 'darwin'
+   gfxstream_backend_cpp_args += '-DVK_USE_PLATFORM_METAL_EXT'
+   gfxstream_backend_cpp_args += '-DVK_USE_PLATFORM_MACOS_MVK'
+ elif host_machine.system() == 'linux'
+-  gfxstream_backend_cpp_args += '-DVK_USE_PLATFORM_XCB_KHR'
++  gfxstream_backend_cpp_args += '-DVK_USE_PLATFORM_WAYLAND_KHR'
+ endif
+ 
+ deps_gfxstream_backend = []
+diff --git a/host/native_sub_window_wayland.cpp b/host/native_sub_window_wayland.cpp
+new file mode 100644
+index 000000000..26b42c7b1
+--- /dev/null
++++ b/host/native_sub_window_wayland.cpp
+@@ -0,0 +1,30 @@
++#include "native_sub_window.h"
++
++EGLNativeWindowType createSubWindow(FBNativeWindowType,
++                                    int,
++                                    int,
++                                    int,
++                                    int,
++                                    float,
++                                    SubWindowRepaintCallback,
++                                    void*,
++                                    int) {
++    return 0;
++}
++
++void destroySubWindow(EGLNativeWindowType) {
++}
++
++int moveSubWindow(FBNativeWindowType,
++                  EGLNativeWindowType,
++                  int,
++                  int,
++                  int,
++                  int,
++                  float) {
++    return 0;
++}
++
++void* getNativeDisplay() {
++    return nullptr;
++}
+diff --git a/host/vulkan/cereal/meson.build b/host/vulkan/cereal/meson.build
+index 2d03c2081..b4bbe9d1c 100644
+--- a/host/vulkan/cereal/meson.build
++++ b/host/vulkan/cereal/meson.build
+@@ -23,7 +23,7 @@ elif host_machine.system() == 'darwin'
+   cereal_cpp_args += '-DVK_USE_PLATFORM_METAL_EXT'
+   cereal_cpp_args += '-DVK_USE_PLATFORM_MACOS_MVK'
+ elif host_machine.system() == 'linux'
+-  cereal_cpp_args += '-DVK_USE_PLATFORM_XCB_KHR'
++  cereal_cpp_args += '-DVK_USE_PLATFORM_WAYLAND_KHR'
+ endif
+ 
+ lib_vulkan_cereal = static_library(
+diff --git a/host/vulkan/emulated_textures/meson.build b/host/vulkan/emulated_textures/meson.build
+index 56eed1778..1728c579c 100644
+--- a/host/vulkan/emulated_textures/meson.build
++++ b/host/vulkan/emulated_textures/meson.build
+@@ -17,7 +17,7 @@ elif host_machine.system() == 'darwin'
+   emulated_texture_args += '-DVK_USE_PLATFORM_METAL_EXT'
+   emulated_texture_args += '-DVK_USE_PLATFORM_MACOS_MVK'
+ elif host_machine.system() == 'linux'
+-  emulated_texture_args += '-DVK_USE_PLATFORM_XCB_KHR'
++  emulated_texture_args += '-DVK_USE_PLATFORM_WAYLAND_KHR'
+ endif
+ 
+ lib_emulated_textures = static_library(
+diff --git a/host/vulkan/meson.build b/host/vulkan/meson.build
+index 499a13bc6..de8fc24ab 100644
+--- a/host/vulkan/meson.build
++++ b/host/vulkan/meson.build
+@@ -63,7 +63,7 @@ elif host_machine.system() == 'windows'
+ elif host_machine.system() == 'qnx'
+   vulkan_server_cpp_args += '-DVK_USE_PLATFORM_SCREEN_QNX'
+ elif host_machine.system() == 'linux'
+-  vulkan_server_cpp_args += '-DVK_USE_PLATFORM_XCB_KHR'
++  vulkan_server_cpp_args += '-DVK_USE_PLATFORM_WAYLAND_KHR'
+ endif
+ 
+ lib_vulkan_server = static_library(
+-- 
+2.34.1
+
