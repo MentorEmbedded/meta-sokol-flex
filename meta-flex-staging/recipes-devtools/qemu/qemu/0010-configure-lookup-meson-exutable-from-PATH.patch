@@ -1,0 +1,30 @@
+From 7b6c2716f843d542e95e4f734ae9be0d81661b05 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Martin=20Hundeb=C3=B8ll?= <martin@geanix.com>
+Date: Wed, 22 May 2024 14:02:55 +0200
+Subject: [PATCH] configure: lookup meson exutable from PATH
+
+Upstream-Status: Inappropriate [workaround, would need a real fix for upstream]
+
+Update context for qemu 10.2.0.
+
+Signed-off-by: Kai Kang <kai.kang@windriver.com>
+---
+ configure | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/configure b/configure
+index 6ddfe4b534..13cb19ee54 100755
+--- a/configure
++++ b/configure
+@@ -967,10 +967,7 @@ get_pwd() {
+     fi
+ }
+ 
+-meson="$(cd pyvenv/bin; get_pwd)/meson"
+-if [ -f "$meson$EXESUF" ]; then
+-  meson="$meson$EXESUF"
+-fi
++meson=`which meson`
+ 
+ # On Haiku, meson might show up in a "non-packaged" subfolder instead, see
+ # https://github.com/haiku/haiku/blob/r1beta5/docs/user/storage/storageintro.dox
