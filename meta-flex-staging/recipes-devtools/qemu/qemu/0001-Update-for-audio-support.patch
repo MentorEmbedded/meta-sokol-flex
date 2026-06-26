@@ -1,0 +1,518 @@
+From 8fceb8ea72a9cf030439481aafec1ebc0ef19669 Mon Sep 17 00:00:00 2001
+From: Dave Cook <dave.cook@siemens.com>
+Date: Mon, 23 Jun 2025 10:31:02 -0600
+Subject: [PATCH 1/1] Update for audio support
+
+- Use the configured qemu pipewire device input and output names as the node names. We can then uniquely identify them when multiple VPs are running
+- Qemu-side fix for AT1-4141 - Audio : volume control / mute not working in audio
+- Fix for AT1-4429 Warnings in QEMU audio device after change to add support for controls
+---
+ audio/pwaudio.c               |   5 +
+ hw/audio/trace-events         |   5 +-
+ hw/audio/virtio-snd.c         | 377 +++++++++++++++++++++++++++++++++-
+ include/hw/audio/virtio-snd.h |   5 +
+ 4 files changed, 387 insertions(+), 5 deletions(-)
+
+diff --git a/audio/pwaudio.c b/audio/pwaudio.c
+index 8e13b58286..8afb314e72 100644
+--- a/audio/pwaudio.c
++++ b/audio/pwaudio.c
+@@ -442,6 +442,11 @@ qpw_stream_new(pwaudio *c, PWVoice *v, const char *stream_name,
+ 
+     trace_pw_period(buf_samples, v->info.rate);
+     if (name) {
++        /* Siemens: For ANA audio work, we need to uniquely identify the virtual
++           platform nodes - use the 'name' property that we set via the QEMU
++           command line as the node name */
++        pw_properties_set(props, PW_KEY_NODE_NAME, name);
++
+         pw_properties_set(props, PW_KEY_TARGET_OBJECT, name);
+     }
+     v->stream = pw_stream_new(c->core, stream_name, props);
+diff --git a/hw/audio/trace-events b/hw/audio/trace-events
+index b8ef572767..1c0daf071c 100644
+--- a/hw/audio/trace-events
++++ b/hw/audio/trace-events
+@@ -40,7 +40,7 @@ asc_write_extreg(const char fifo, int reg, unsigned size, uint64_t value) "fifo
+ asc_update_irq(int irq, int a, int b) "set IRQ to %d (A: 0x%x B: 0x%x)"
+ 
+ #virtio-snd.c
+-virtio_snd_get_config(void *vdev, uint32_t jacks, uint32_t streams, uint32_t chmaps) "snd %p: get_config jacks=%"PRIu32" streams=%"PRIu32" chmaps=%"PRIu32""
++virtio_snd_get_config(void *vdev, uint32_t jacks, uint32_t streams, uint32_t chmaps, uint32_t controls) "snd %p: get_config jacks=%"PRIu32" streams=%"PRIu32" chmaps=%"PRIu32" controls=%"PRIu32""
+ virtio_snd_get_features(void *vdev, uint64_t features) "snd %p: get_features 0x%"PRIx64
+ virtio_snd_vm_state_running(void) "vm state running"
+ virtio_snd_vm_state_stopped(void) "vm state stopped"
+@@ -57,3 +57,6 @@ virtio_snd_handle_event(void) "event queue callback called"
+ virtio_snd_pcm_stream_flush(uint32_t stream) "flushing stream %"PRIu32
+ virtio_snd_handle_tx_xfer(void) "tx queue callback called"
+ virtio_snd_handle_rx_xfer(void) "rx queue callback called"
++virtio_snd_handle_ctl_info(uint32_t ctl_id) "VIRTIO_SND_R_CTL_INFO called for control %"PRIu32
++virtio_snd_handle_ctl_read(uint32_t ctl_id) "VIRTIO_SND_R_CTL_READ called for control %"PRIu32
++virtio_snd_handle_ctl_write(uint32_t ctl_id) "VIRTIO_SND_R_CTL_WRITE called for control %"PRIu32
+diff --git a/hw/audio/virtio-snd.c b/hw/audio/virtio-snd.c
+index eca3319e59..143a2d78db 100644
+--- a/hw/audio/virtio-snd.c
++++ b/hw/audio/virtio-snd.c
+@@ -30,6 +30,61 @@
+ #define VIRTIO_SOUND_STREAM_DEFAULT 2
+ #define VIRTIO_SOUND_CHMAP_DEFAULT 0
+ #define VIRTIO_SOUND_HDA_FN_NID 0
++/* Volume and Mute */
++enum {
++    VOLUME_CONTROL_INPUT_ID = 0,
++    VOLUME_CONTROL_OUTPUT_ID,
++    MUTE_CONTROL_INPUT_ID,
++    MUTE_CONTROL_OUTPUT_ID,
++    VIRTIO_SOUND_CONTROLS_COUNT
++};
++/* Control info */
++const struct virtio_snd_ctl_info audio_controls [VIRTIO_SOUND_CONTROLS_COUNT] = {
++    /* Volume control (input)*/
++    {
++        { VIRTIO_SOUND_HDA_FN_NID }, /* function group node id (High Definition Audio Specification 7.1.2) */
++        VIRTIO_SND_CTL_ROLE_VOLUME << 1 | VIRTIO_SND_D_OUTPUT,
++        VIRTIO_SND_CTL_TYPE_INTEGER,
++        1 << VIRTIO_SND_CTL_ACCESS_READ | 1 << VIRTIO_SND_CTL_ACCESS_WRITE,
++        1, /* Only one instance for this device */
++        0, /* unused */
++        "Input Volume",
++        {{ 0, 100, 1}} /* min, max, step for integer */
++    },
++    /* Volume control (output)*/
++    {
++        { VIRTIO_SOUND_HDA_FN_NID }, /* function group node id (High Definition Audio Specification 7.1.2) */
++        VIRTIO_SND_CTL_ROLE_VOLUME << 1 | VIRTIO_SND_D_OUTPUT,
++        VIRTIO_SND_CTL_TYPE_INTEGER,
++        1 << VIRTIO_SND_CTL_ACCESS_READ | 1 << VIRTIO_SND_CTL_ACCESS_WRITE,
++        1, /* Only one instance for this device */
++        0, /* unused */
++        "Output Volume",
++        {{ 0, 100, 1}} /* min, max, step for integer */
++    },
++    /* Mute control (input) */
++    {
++        { VIRTIO_SOUND_HDA_FN_NID }, /* function group node id (High Definition Audio Specification 7.1.2) */
++        VIRTIO_SND_CTL_ROLE_MUTE << 1 | VIRTIO_SND_D_OUTPUT,
++        VIRTIO_SND_CTL_TYPE_BOOLEAN,
++        1 << VIRTIO_SND_CTL_ACCESS_READ | 1 << VIRTIO_SND_CTL_ACCESS_WRITE,
++        1, /* Only one instance for this device */
++        0, /* unused */
++        "Mute Input",
++        {{0, 1, 1}}  /* min, max, step for boolean */
++    },
++    /* Mute control (output) */
++    {
++        { VIRTIO_SOUND_HDA_FN_NID }, /* function group node id (High Definition Audio Specification 7.1.2) */
++        VIRTIO_SND_CTL_ROLE_MUTE << 1 | VIRTIO_SND_D_OUTPUT,
++        VIRTIO_SND_CTL_TYPE_BOOLEAN,
++        1 << VIRTIO_SND_CTL_ACCESS_READ | 1 << VIRTIO_SND_CTL_ACCESS_WRITE,
++        1, /* Only one instance for this device */
++        0, /* unused */
++        "Mute Output",
++        {{0, 1, 1}}  /* min, max, step for boolean */
++    }
++};
+ 
+ static void virtio_snd_pcm_out_cb(void *data, int available);
+ static void virtio_snd_process_cmdq(VirtIOSound *s);
+@@ -85,6 +140,8 @@ static const Property virtio_snd_properties[] = {
+                        VIRTIO_SOUND_STREAM_DEFAULT),
+     DEFINE_PROP_UINT32("chmaps", VirtIOSound, snd_conf.chmaps,
+                        VIRTIO_SOUND_CHMAP_DEFAULT),
++    DEFINE_PROP_UINT32("controls", VirtIOSound, snd_conf.controls,
++                       VIRTIO_SOUND_CONTROLS_COUNT),
+ };
+ 
+ static void
+@@ -96,12 +153,15 @@ virtio_snd_get_config(VirtIODevice *vdev, uint8_t *config)
+     trace_virtio_snd_get_config(vdev,
+                                 s->snd_conf.jacks,
+                                 s->snd_conf.streams,
+-                                s->snd_conf.chmaps);
++                                s->snd_conf.chmaps,
++                                s->support_controls ? s->snd_conf.controls : 0);
+ 
+     memcpy(sndconfig, &s->snd_conf, sizeof(s->snd_conf));
+     cpu_to_le32s(&sndconfig->jacks);
+     cpu_to_le32s(&sndconfig->streams);
+     cpu_to_le32s(&sndconfig->chmaps);
++    if (s->support_controls)
++        cpu_to_le32s(&sndconfig->controls);
+ 
+ }
+ 
+@@ -493,6 +553,14 @@ static const char *print_code(uint32_t code)
+     CASE(PCM_START);
+     CASE(PCM_STOP);
+     CASE(CHMAP_INFO);
++    CASE(CTL_INFO);
++    CASE(CTL_ENUM_ITEMS);
++    CASE(CTL_READ);
++    CASE(CTL_WRITE);
++    CASE(CTL_TLV_READ);
++    CASE(CTL_TLV_WRITE);
++    CASE(CTL_TLV_COMMAND);
++
+     default:
+         return "invalid code";
+     }
+@@ -651,6 +719,263 @@ static void virtio_snd_handle_pcm_release(VirtIOSound *s,
+     cmd->resp.code = cpu_to_le32(VIRTIO_SND_S_OK);
+ }
+ 
++/*
++ * Handles VIRTIO_SND_R_CTL_INFO.
++ *
++ * @s: VirtIOSound device
++ * @cmd: The request command queue element from VirtIOSound cmdq field
++ */
++static void virtio_snd_handle_ctl_info(VirtIOSound *s,
++                                          virtio_snd_ctrl_command *cmd)
++{
++    uint32_t start_id, control_id, count, size;
++    struct virtio_snd_ctl_info val;
++    struct virtio_snd_query_info req;
++    g_autofree struct virtio_snd_ctl_info *ctl_info_array = NULL;
++    size_t msg_sz = iov_to_buf(cmd->elem->out_sg,
++                               cmd->elem->out_num,
++                               0,
++                               &req,
++                               sizeof(struct virtio_snd_query_info));
++
++    if (msg_sz != sizeof(struct virtio_snd_query_info)) {
++        qemu_log_mask(LOG_GUEST_ERROR,
++                "%s: virtio-snd command size incorrect %zu vs \
++                %zu\n", __func__, msg_sz, sizeof(struct virtio_snd_query_info));
++        cmd->resp.code = cpu_to_le32(VIRTIO_SND_S_BAD_MSG);
++        return;
++    }
++
++    start_id = le32_to_cpu(req.start_id);
++    count = le32_to_cpu(req.count);
++    size = le32_to_cpu(req.size);
++
++    if (iov_size(cmd->elem->in_sg, cmd->elem->in_num) <
++        sizeof(virtio_snd_hdr) + size * count) {
++        error_report("sound control info: buffer too small, got: %zu, needed: %zu",
++                iov_size(cmd->elem->in_sg, cmd->elem->in_num),
++                sizeof(virtio_snd_hdr) + size * count);
++        cmd->resp.code = cpu_to_le32(VIRTIO_SND_S_BAD_MSG);
++        return;
++    }
++
++    /* Only provide info on controls we know about */
++    count = (count + start_id) > VIRTIO_SOUND_CONTROLS_COUNT ? VIRTIO_SOUND_CONTROLS_COUNT - start_id : count;
++
++    ctl_info_array = g_new0(struct virtio_snd_ctl_info, count);
++    for (uint32_t i = 0; i < count; i++) {
++        control_id = i + start_id;
++        trace_virtio_snd_handle_ctl_info(control_id);
++
++        val = audio_controls[control_id];
++        val.hdr.hda_fn_nid = cpu_to_le32(val.hdr.hda_fn_nid);
++        val.role = cpu_to_le32(val.role);
++        val.type = cpu_to_le32(val.type);
++        val.access = cpu_to_le32(val.access);
++        val.count = cpu_to_le32(val.count);
++        val.index = cpu_to_le32(val.index);
++        val.value.integer.min = cpu_to_le32(val.value.integer.min);
++        val.value.integer.max = cpu_to_le32(val.value.integer.max);
++        val.value.integer.step = cpu_to_le32(val.value.integer.step);
++        ctl_info_array[i] = val;
++    }
++
++    cmd->payload_size = sizeof(struct virtio_snd_ctl_info) * count;
++    cmd->resp.code = cpu_to_le32(VIRTIO_SND_S_OK);
++    iov_from_buf(cmd->elem->in_sg,
++                 cmd->elem->in_num,
++                 sizeof(virtio_snd_hdr),
++                 ctl_info_array,
++                 cmd->payload_size);
++}
++
++/*
++ * Handles VIRTIO_SND_R_CTL_READ.
++ *
++ * @s: VirtIOSound device
++ * @cmd: The request command queue element from VirtIOSound cmdq field
++ */
++static void virtio_snd_handle_ctl_read(VirtIOSound *s,
++                                          virtio_snd_ctrl_command *cmd)
++{
++    struct virtio_snd_ctl_hdr req;
++    struct virtio_snd_ctl_value val;
++    uint32_t control_id;
++    size_t msg_sz = iov_to_buf(cmd->elem->out_sg,
++                               cmd->elem->out_num,
++                               0,
++                               &req,
++                               sizeof(struct virtio_snd_ctl_hdr));
++
++    if (msg_sz != sizeof(struct virtio_snd_ctl_hdr)) {
++        qemu_log_mask(LOG_GUEST_ERROR,
++                "%s: virtio-snd ctl read size incorrect %zu vs \
++                %zu\n", __func__, msg_sz, sizeof(struct virtio_snd_ctl_hdr));
++        cmd->resp.code = cpu_to_le32(VIRTIO_SND_S_BAD_MSG);
++        return;
++    }
++
++    control_id = le32_to_cpu(req.control_id);
++    trace_virtio_snd_handle_ctl_read(control_id);
++
++    if (control_id >= VIRTIO_SOUND_CONTROLS_COUNT) {
++        qemu_log_mask(LOG_GUEST_ERROR,
++                "%s: virtio-snd ctl read for unknown control, id %u \n"\
++                , __func__, control_id);
++        cmd->resp.code = cpu_to_le32(VIRTIO_SND_S_BAD_MSG);
++        return;
++    }
++
++    switch (control_id){
++        case VOLUME_CONTROL_INPUT_ID:
++            val.value.integer[0] = cpu_to_le32(s->volume_control_input_val);
++        break;
++         case VOLUME_CONTROL_OUTPUT_ID:
++            val.value.integer[0] = cpu_to_le32(s->volume_control_output_val);
++        break;
++        case MUTE_CONTROL_INPUT_ID:
++            val.value.integer[0] = cpu_to_le32(s->mute_control_input_val);
++        break;
++       case MUTE_CONTROL_OUTPUT_ID:
++            val.value.integer[0] = cpu_to_le32(s->mute_control_output_val);
++        break;
++    }
++
++    cmd->resp.code = cpu_to_le32(VIRTIO_SND_S_OK);
++    iov_from_buf(cmd->elem->in_sg,
++                 cmd->elem->in_num,
++                 sizeof(virtio_snd_hdr),
++                 &val,
++                 sizeof(struct virtio_snd_ctl_value));
++}
++
++/*
++ * Sets volume and mute status on all streams matching 'direction'.
++ *
++ * @s: VirtIOSound device
++ * @direction: VIRTIO_SND_D_INPUT or VIRTIO_SND_D_OUTPUT
++ * @mute: mute boolean state of streams in 'direction'
++ * @volume: volume level between 0 and 100 of streams in 'direction'
++ */
++static void virtio_snd_set_stream_volume(VirtIOSound *s, uint8_t direction, uint32_t mute, uint32_t volume)
++{
++    VirtIOSoundPCMStream *stream;
++    /* Convert percentage volume to 0-255 */
++    uint32_t stream_volume = (255 * volume) / 100;
++
++    for (int i = 0; i < s->snd_conf.streams; i++) {
++        stream = virtio_snd_pcm_get_stream(s, i);
++
++        if (stream && stream->info.direction == direction) {
++            switch(direction) {
++            case VIRTIO_SND_D_OUTPUT:
++                AUD_set_volume_out_lr(stream->voice.out, mute, (uint8_t)stream_volume, (uint8_t)stream_volume);
++                break;
++            case VIRTIO_SND_D_INPUT:
++                AUD_set_volume_in_lr(stream->voice.in, mute, (uint8_t)stream_volume, (uint8_t)stream_volume);
++                break;
++            default:
++                break;
++            }
++        }
++    }
++}
++
++/*
++ * Handles VIRTIO_SND_R_CTL_WRITE.
++ *
++ * @s: VirtIOSound device
++ * @cmd: The request command queue element from VirtIOSound cmdq field
++ */
++static void virtio_snd_handle_ctl_write(VirtIOSound *s,
++                                          virtio_snd_ctrl_command *cmd)
++{
++    struct virtio_snd_ctl_hdr req;
++    struct virtio_snd_ctl_value val;
++    uint32_t control_id, local_value;
++    uint32_t volume, mute, update = 0;
++    uint8_t direction;
++    size_t msg_sz = iov_to_buf(cmd->elem->out_sg,
++                               cmd->elem->out_num,
++                               0,
++                               &req,
++                               sizeof(struct virtio_snd_ctl_hdr));
++
++    if (msg_sz != sizeof(struct virtio_snd_ctl_hdr)) {
++        qemu_log_mask(LOG_GUEST_ERROR,
++                "%s: virtio-snd ctl write request size incorrect %zu vs \
++                %zu\n", __func__, msg_sz, sizeof(struct virtio_snd_ctl_hdr));
++        cmd->resp.code = cpu_to_le32(VIRTIO_SND_S_BAD_MSG);
++        return;
++    }
++
++    control_id = le32_to_cpu(req.control_id);
++    trace_virtio_snd_handle_ctl_write(control_id);
++
++    if (control_id >= VIRTIO_SOUND_CONTROLS_COUNT) {
++        qemu_log_mask(LOG_GUEST_ERROR,
++                "%s: virtio-snd ctl read for unknown control, id %u \n"\
++                , __func__, control_id);
++        cmd->resp.code = cpu_to_le32(VIRTIO_SND_S_BAD_MSG);
++        return;
++    }
++
++    msg_sz = iov_to_buf(cmd->elem->out_sg,
++                               cmd->elem->out_num,
++                               sizeof(struct virtio_snd_ctl_hdr),
++                               &val,
++                               sizeof(struct virtio_snd_ctl_value));
++
++    if (msg_sz != sizeof(struct virtio_snd_ctl_value)) {
++        qemu_log_mask(LOG_GUEST_ERROR,
++                "%s: virtio-snd ctl write payload size incorrect %zu vs \
++                %zu\n", __func__, msg_sz, sizeof(struct virtio_snd_ctl_value));
++        cmd->resp.code = cpu_to_le32(VIRTIO_SND_S_BAD_MSG);
++        return;
++    }
++
++    local_value = le32_to_cpu(val.value.integer[0]);
++    switch (control_id){
++        case VOLUME_CONTROL_INPUT_ID:
++            if (local_value != s->volume_control_input_val) {
++                volume = s->volume_control_input_val = local_value;
++                mute = s->mute_control_input_val;
++                direction = VIRTIO_SND_D_INPUT;
++                update = 1;
++            }
++        break;
++        case VOLUME_CONTROL_OUTPUT_ID:
++            if (local_value != s->volume_control_output_val) {
++                volume = s->volume_control_output_val = local_value;
++                mute = s->mute_control_output_val;
++                direction = VIRTIO_SND_D_OUTPUT;
++                update = 1;
++            }
++        break;
++        case MUTE_CONTROL_INPUT_ID:
++            if (local_value != s->mute_control_input_val) {
++                volume = s->volume_control_input_val;
++                mute = s->mute_control_input_val = local_value;
++                direction = VIRTIO_SND_D_INPUT;
++                update = 1;
++            }
++        break;
++        case MUTE_CONTROL_OUTPUT_ID:
++            if (local_value != s->mute_control_output_val) {
++                volume = s->volume_control_output_val;
++                mute = s->mute_control_output_val = local_value;
++                direction = VIRTIO_SND_D_OUTPUT;
++                update = 1;
++            }
++        break;
++    }
++
++    if (update)
++        virtio_snd_set_stream_volume(s, direction, mute, volume);
++
++    cmd->resp.code = cpu_to_le32(VIRTIO_SND_S_OK);
++}
++
+ /*
+  * The actual processing done in virtio_snd_process_cmdq().
+  *
+@@ -712,6 +1037,39 @@ process_cmd(VirtIOSound *s, virtio_snd_ctrl_command *cmd)
+         trace_virtio_snd_handle_chmap_info();
+         cmd->resp.code = cpu_to_le32(VIRTIO_SND_S_NOT_SUPP);
+         break;
++    case VIRTIO_SND_R_CTL_INFO:
++        virtio_snd_handle_ctl_info(s, cmd);
++        break;
++    case VIRTIO_SND_R_CTL_ENUM_ITEMS:
++        /* not needed for our controls */
++        qemu_log_mask(LOG_UNIMP,
++                     "virtio_snd: ctl enum items functionality is unimplemented.\n");
++        cmd->resp.code = cpu_to_le32(VIRTIO_SND_S_BAD_MSG);
++        break;
++    case VIRTIO_SND_R_CTL_READ:
++        virtio_snd_handle_ctl_read(s, cmd);
++        break;
++    case VIRTIO_SND_R_CTL_WRITE:
++        virtio_snd_handle_ctl_write(s, cmd);
++        break;
++    case VIRTIO_SND_R_CTL_TLV_READ:
++        /* not needed for our controls */
++        qemu_log_mask(LOG_UNIMP,
++                     "virtio_snd: tlv read functionality is unimplemented.\n");
++        cmd->resp.code = cpu_to_le32(VIRTIO_SND_S_BAD_MSG);
++        break;
++    case VIRTIO_SND_R_CTL_TLV_WRITE:
++        /* not needed for our controls */
++        qemu_log_mask(LOG_UNIMP,
++                     "virtio_snd: ctl tlv write functionality is unimplemented.\n");
++        cmd->resp.code = cpu_to_le32(VIRTIO_SND_S_BAD_MSG);
++        break;
++    case VIRTIO_SND_R_CTL_TLV_COMMAND:
++        /* not needed for our controls */
++        qemu_log_mask(LOG_UNIMP,
++                     "virtio_snd: ctl tlv command functionality is unimplemented.\n");
++        cmd->resp.code = cpu_to_le32(VIRTIO_SND_S_BAD_MSG);
++        break;
+     default:
+         /* error */
+         error_report("virtio snd header not recognized: %"PRIu32, code);
+@@ -999,15 +1357,19 @@ static uint64_t get_features(VirtIODevice *vdev, uint64_t features,
+                              Error **errp)
+ {
+     /*
+-     * virtio-v1.2-csd01, 5.14.3,
+-     * Feature Bits
+-     * None currently defined.
++     * virtio-v1.3
++     * Feature Bits:
++     * VIRTIO_SND_F_CTLS.
+      */
+     VirtIOSound *s = VIRTIO_SND(vdev);
+     features |= s->features;
+ 
+     trace_virtio_snd_get_features(vdev, features);
+ 
++    s->support_controls = false;
++    if (virtio_has_feature(features, VIRTIO_SND_F_CTLS))
++        s->support_controls = true;
++
+     return features;
+ }
+ 
+@@ -1069,6 +1431,13 @@ static void virtio_snd_realize(DeviceState *dev, Error **errp)
+ 
+     virtio_init(vdev, VIRTIO_ID_SOUND, sizeof(virtio_snd_config));
+     virtio_add_feature(&vsnd->features, VIRTIO_F_VERSION_1);
++    virtio_add_feature(&vsnd->features, VIRTIO_SND_F_CTLS);
++
++    /* Initialize volume and mute states */
++    vsnd->volume_control_input_val = 100;
++    vsnd->volume_control_output_val = 100;
++    vsnd->mute_control_input_val = 0;
++    vsnd->mute_control_output_val = 0;
+ 
+     /* set default params for all streams */
+     default_params.features = 0;
+diff --git a/include/hw/audio/virtio-snd.h b/include/hw/audio/virtio-snd.h
+index 8dafedb276..e6a1f98291 100644
+--- a/include/hw/audio/virtio-snd.h
++++ b/include/hw/audio/virtio-snd.h
+@@ -222,6 +222,11 @@ struct VirtIOSound {
+     QemuMutex cmdq_mutex;
+     QTAILQ_HEAD(, virtio_snd_ctrl_command) cmdq;
+     bool processing_cmdq;
++    bool support_controls;
++    uint32_t volume_control_input_val;
++    uint32_t volume_control_output_val;
++    uint32_t mute_control_input_val;
++    uint32_t mute_control_output_val;
+     /*
+      * Convenience queue to keep track of invalid tx/rx queue messages inside
+      * the tx/rx callbacks.
+-- 
+2.34.1
+
