@@ -14,7 +14,7 @@ SRC_URI = "git://gitlab.freedesktop.org/gstreamer/gstreamer.git;protocol=https;b
 
 SRCREV = "87bc0c6e949e3dcc440658f78ef52aa8088cb62f"
 
-S = "${UNPACKDIR}/${BP}/subprojects/gst-examples"
+S = "${WORKDIR}/${BP}/subprojects/gst-examples"
 
 inherit meson pkgconfig features_check
 
@@ -26,7 +26,7 @@ UPSTREAM_CHECK_GITTAGREGEX = "^(?P<pver>\d+\.(\d*[02468])+(\.\d+)+)"
 ANY_OF_DISTRO_FEATURES = "${GTK3DISTROFEATURES}"
 
 do_install:append() {
-	install -m 0644 -D ${UNPACKDIR}/gst-player.desktop ${D}${datadir}/applications/gst-player.desktop
+	install -m 0644 -D ${WORKDIR}/gst-player.desktop ${D}${datadir}/applications/gst-player.desktop
 }
 
 RDEPENDS:${PN} = "gstreamer1.0-plugins-base-playback"
