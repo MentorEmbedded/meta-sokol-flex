@@ -1,0 +1,204 @@
+From 7f0774898009695462a732a45a74b5c43c06aa6f Mon Sep 17 00:00:00 2001
+From: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+Date: Thu, 22 Oct 2026 10:03:00 +0500
+Subject: [PATCH 03/10] framebuffer: Draw the framebuffer as a single texture
+
+The framebuffer was exported as a grid of 128x128 GdkMemoryTexture
+tiles, each drawn through the paintable's scale transform. When the
+widget size differs from the guest resolution the tile edges land on
+fractional pixels and are anti-aliased independently, by the GL as well
+as by the cairo renderer, which draws a visible grid over the picture.
+The grid was also padded up to a multiple of 128, so the padding below
+and to the right of the guest area was drawn too.
+
+Create one texture of exactly width x height from the cairo surface
+memory and drop it whenever the surface is modified. The tile cache
+only saved uploads for small partial updates; a full-frame Scanout
+invalidated every tile anyway.
+
+The trade-off is that every update now uploads the whole frame instead
+of just the changed tiles. For guests that send many small updates this
+could be reduced again with the update region of GdkMemoryTextureBuilder
+(GTK 4.16).
+
+Upstream-Status: Pending
+Signed-off-by: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+---
+ lib/mks-cairo-framebuffer.c | 115 +++++++++---------------------------
+ 1 file changed, 29 insertions(+), 86 deletions(-)
+
+diff --git a/lib/mks-cairo-framebuffer.c b/lib/mks-cairo-framebuffer.c
+index 16cff34..2545a77 100644
+--- a/lib/mks-cairo-framebuffer.c
++++ b/lib/mks-cairo-framebuffer.c
+@@ -37,22 +37,26 @@ struct _MksCairoFramebuffer
+   /* The underlying surface we'll draw to */
+   cairo_surface_t *surface;
+ 
+-  /* A GBytes that we can use to reference slices which ultimately
+-   * references the cairo surface. This goes against the internal design
+-   * of GdkTexture (which are supposed to be immutable) so that we can
+-   * avoid additional copies beyond the one to the GPU.
++  /* A GBytes that references the cairo surface. This goes against the
++   * internal design of GdkTexture (which are supposed to be immutable) so
++   * that we can avoid additional copies beyond the one to the GPU.
+    *
+-   * We somewhat abuse the GdkSnapshot diffing here by giving a new memory
+-   * texture for tiles that changed even though they will point to the
+-   * same memory. That way the renderer will upload the new contents for
+-   * that area instead of using the previously cached texture.
++   * We somewhat abuse the GdkSnapshot diffing here by creating a new memory
++   * texture whenever the content changed even though it points to the same
++   * memory. That way the renderer will upload the new contents instead of
++   * using the previously cached texture.
+    */
+   GBytes *content;
+ 
+-  /* The GdkMemoryTexture tiles we'll export using indices
+-   * in the format [row0:col0,col1,.. to rowN:colN]
++  /* The texture for the current content, created lazily on snapshot and
++   * dropped whenever the surface is modified.
++   *
++   * A single texture is used on purpose: drawing the framebuffer as many
++   * separately scaled tiles shows visible seams (a grid) whenever the
++   * widget size differs from the guest resolution, and the tile area
++   * beyond the guest resolution would be drawn as well.
+    */
+-  GPtrArray *tiles;
++  GdkTexture *texture;
+ 
+   /* The format our framebuffer uses and corresponding format
+    * the uploaded textures will use.
+@@ -128,47 +132,19 @@ mks_cairo_framebuffer_snapshot (GdkPaintable *paintable,
+ {
+   MksCairoFramebuffer *self = MKS_CAIRO_FRAMEBUFFER (paintable);
+ 
+-  gtk_snapshot_save (snapshot);
+-  gtk_snapshot_scale (snapshot,
+-                      width / (double)self->width,
+-                      height / (double)self->height);
++  if (self->content == NULL)
++    return;
+ 
+-  for (guint row = 0; row < self->n_rows; row++)
+-    {
+-      guint row_pos = row * self->n_columns;
+-
+-      for (guint col = 0; col < self->n_columns; col++)
+-        {
+-          guint col_pos = row_pos + col;
+-
+-          if G_UNLIKELY (self->tiles->pdata[col_pos] == NULL)
+-            {
+-              guint tile_y = row * TILE_HEIGHT;
+-              guint tile_x = col * TILE_WIDTH;
+-
+-              gsize byte_offset = (tile_y * self->stride) + (tile_x * self->bpp);
+-              gsize n_bytes = (TILE_HEIGHT-1) * self->stride + (TILE_WIDTH * self->bpp);
+-
+-              g_autoptr(GBytes) bytes = g_bytes_new_from_bytes (self->content, byte_offset, n_bytes);
+-
+-              self->tiles->pdata[col_pos] =
+-                gdk_memory_texture_new (TILE_WIDTH,
+-                                        TILE_HEIGHT,
+-                                        self->memory_format,
+-                                        bytes,
+-                                        self->stride);
+-            }
+-
+-          gtk_snapshot_append_texture (snapshot,
+-                                       self->tiles->pdata[col_pos],
+-                                       &GRAPHENE_RECT_INIT (col * TILE_WIDTH,
+-                                                            row * TILE_HEIGHT,
+-                                                            TILE_WIDTH,
+-                                                            TILE_HEIGHT));
+-        }
+-    }
++  if (self->texture == NULL)
++    self->texture = gdk_memory_texture_new (self->width,
++                                            self->height,
++                                            self->memory_format,
++                                            self->content,
++                                            self->stride);
+ 
+-  gtk_snapshot_restore (snapshot);
++  gtk_snapshot_append_texture (snapshot,
++                               self->texture,
++                               &GRAPHENE_RECT_INIT (0, 0, width, height));
+ }
+ 
+ static void
+@@ -195,15 +171,6 @@ realign (guint *value,
+     *value += (alignment - rem);
+ }
+ 
+-static void
+-texture_clear (gpointer data)
+-{
+-  GdkTexture *texture = data;
+-
+-  if (texture != NULL)
+-    g_object_unref (texture);
+-}
+-
+ static void
+ mks_cairo_framebuffer_constructed (GObject *object)
+ {
+@@ -272,8 +239,6 @@ mks_cairo_framebuffer_constructed (GObject *object)
+   self->n_columns = self->real_width / TILE_WIDTH;
+   self->n_rows = self->real_height / TILE_HEIGHT;
+ 
+-  self->tiles = g_ptr_array_new_full (self->n_columns * self->n_rows, texture_clear);
+-  g_ptr_array_set_size (self->tiles, self->n_columns * self->n_rows);
+ }
+ 
+ static void
+@@ -283,7 +248,7 @@ mks_cairo_framebuffer_dispose (GObject *object)
+ 
+   g_clear_pointer (&self->content, g_bytes_unref);
+   g_clear_pointer (&self->surface, cairo_surface_destroy);
+-  g_clear_pointer (&self->tiles, g_ptr_array_unref);
++  g_clear_object (&self->texture);
+ 
+   G_OBJECT_CLASS (mks_cairo_framebuffer_parent_class)->dispose (object);
+ }
+@@ -448,34 +413,12 @@ mks_cairo_framebuffer_update (MksCairoFramebuffer *self,
+                               guint                height)
+ {
+   cairo_t *cr;
+-  guint col1, col2;
+-  guint row1, row2;
+ 
+   g_return_val_if_fail (MKS_IS_CAIRO_FRAMEBUFFER (self), NULL);
+   g_return_val_if_fail (self->surface != NULL, NULL);
+ 
+-  g_assert (self->n_columns > 0);
+-  g_assert (self->n_rows > 0);
+-
+-  col1 = MIN (x / TILE_WIDTH, self->n_columns-1);
+-  col2 = MIN ((x + width) / TILE_WIDTH, self->n_columns-1);
+-
+-  row1 = MIN (y / TILE_HEIGHT, self->n_rows-1);
+-  row2 = MIN ((y + height) / TILE_HEIGHT, self->n_rows-1);
+-
+-  for (guint row = row1; row <= row2; row++)
+-    {
+-      guint row_pos = row * self->n_columns;
+-
+-      for (guint col = col1; col <= col2; col++)
+-        {
+-          guint col_pos = row_pos + col;
+-
+-          g_assert (col_pos < self->tiles->len);
+-
+-          g_clear_object (&self->tiles->pdata[col_pos]);
+-        }
+-    }
++  /* The content is about to change, so the cached texture is stale. */
++  g_clear_object (&self->texture);
+ 
+   cr = cairo_create (self->surface);
+   cairo_translate (cr, x, y);
+-- 
+2.43.0
+

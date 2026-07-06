@@ -1,0 +1,44 @@
+From 1affa268375530b0e8fd10da87974ba5bddab0d4 Mon Sep 17 00:00:00 2001
+From: Mark Rivers <mark.rivers@siemens.com>
+Date: Thu, 22 Oct 2026 10:04:00 +0500
+Subject: [PATCH 04/10] screen: Do not require both keyboard and mouse
+
+mks_screen_setup() only accepted a console when the same object also
+provided a keyboard and a mouse. Which of these interfaces QEMU exports
+depends on its Display1 capabilities, and a console without them was
+dropped, so no screen was shown at all.
+
+A console is all that is needed to show a screen. Return success when
+it is present. Keyboard, mouse and touch input stay optional, and
+MksDisplayPicture already ignores input events while one of them is
+missing.
+
+Based on commit 5afe45f of the ANA libmks fork.
+
+Upstream-Status: Pending
+Signed-off-by: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+---
+ lib/mks-screen.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/lib/mks-screen.c b/lib/mks-screen.c
+index bc8db2b..a01bf70 100644
+--- a/lib/mks-screen.c
++++ b/lib/mks-screen.c
+@@ -210,9 +210,10 @@ mks_screen_setup (MksDevice     *device,
+         self->touchable = _mks_device_new (MKS_TYPE_TOUCHABLE, device->session, object);
+     }
+ 
+-  return self->console != NULL &&
+-         self->keyboard != NULL &&
+-         self->mouse != NULL;
++  /* Keyboard/mouse may be absent depending on exported Display1 capabilities.
++   * A console is sufficient to expose a usable screen.
++   */
++  return self->console != NULL;
+ }
+ 
+ static void
+-- 
+2.43.0
+

@@ -1,0 +1,49 @@
+From 8f92024c6382ec7dc70d0f5d2f7c4029895bdfe3 Mon Sep 17 00:00:00 2001
+From: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+Date: Thu, 22 Oct 2026 10:07:00 +0500
+Subject: [PATCH 07/10] tools: Add --no-auto-resize
+
+MksDisplay resizes the guest display to the window size by default.
+Some guests, for example Android with a DRM hwcomposer, are brought up
+at a fixed resolution and should keep it.
+
+Add --no-auto-resize to leave the guest resolution alone and let GTK
+scale the picture to the window. The default is unchanged.
+
+Upstream-Status: Pending
+Signed-off-by: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+---
+ tools/mks.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/tools/mks.c b/tools/mks.c
+index 6e15d08..0189496 100644
+--- a/tools/mks.c
++++ b/tools/mks.c
+@@ -32,11 +32,14 @@ typedef struct
+   guint      n_windows;
+ } MksApp;
+ 
+-static char **opt_heads;
++static gboolean   opt_no_auto_resize;
++static char     **opt_heads;
+ 
+ static const GOptionEntry entries[] = {
+   { "head", 'H', 0, G_OPTION_ARG_STRING_ARRAY, &opt_heads,
+     "Only show this guest display head (repeatable, default: all)", "N" },
++  { "no-auto-resize", 0, 0, G_OPTION_ARG_NONE, &opt_no_auto_resize,
++    "Do not resize the guest display to the window size", NULL },
+   { NULL }
+ };
+ 
+@@ -147,6 +150,7 @@ create_window (MksApp    *app,
+                          NULL);
+ 
+   display = mks_display_new ();
++  mks_display_set_auto_resize (MKS_DISPLAY (display), !opt_no_auto_resize);
+   mks_display_set_screen (MKS_DISPLAY (display), screen);
+   gtk_window_set_child (window, display);
+ 
+-- 
+2.43.0
+
