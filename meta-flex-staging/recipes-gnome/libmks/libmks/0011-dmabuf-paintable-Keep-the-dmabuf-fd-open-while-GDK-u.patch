@@ -1,0 +1,173 @@
+From a2ece589e919f3f06289681788286e41834ddd0c Mon Sep 17 00:00:00 2001
+From: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+Date: Fri, 6 Nov 2026 09:06:50 +0000
+Subject: [PATCH] dmabuf-paintable: Keep the dmabuf fd open while GDK uses it
+
+GdkDmabufTextureBuilder does not own the file descriptors it is given.
+They have to stay open until the texture is destroyed, which is what
+the destroy callback of gdk_dmabuf_texture_builder_build() is for.
+
+MksDmabufPaintable passed the descriptor of the scanout and no
+callback, while MksPaintable closes that descriptor as soon as the
+next ScanoutDMABUF arrives. QEMU sends one for every scanout switch,
+so for a guest that flips between buffers the descriptor can be closed
+before the texture of the last UpdateDMABUF is built or downloaded.
+GDK then fails with "Failed to seek dmabuf: Bad file descriptor" and
+"Failed to download dmabuf texture", and the frame is drawn black. A
+failed build also returned from the snapshot without drawing anything.
+
+Give the builder its own duplicate of the descriptor. Once a texture
+is built, the duplicate belongs to the texture and is closed from the
+destroy callback. If the build fails, close it and keep drawing the
+last texture instead of nothing.
+
+Upstream-Status: Pending
+Signed-off-by: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+---
+ lib/mks-dmabuf-paintable.c | 64 ++++++++++++++++++++++++++++++++------
+ 1 file changed, 55 insertions(+), 9 deletions(-)
+
+diff --git a/lib/mks-dmabuf-paintable.c b/lib/mks-dmabuf-paintable.c
+index a4895e2..8082e55 100644
+--- a/lib/mks-dmabuf-paintable.c
++++ b/lib/mks-dmabuf-paintable.c
+@@ -22,6 +22,10 @@
+ 
+ #include "config.h"
+ 
++#include <errno.h>
++#include <fcntl.h>
++
++#include <glib/gstdio.h>
+ #include <gtk/gtk.h>
+ 
+ #include "mks-dmabuf-paintable-private.h"
+@@ -32,13 +36,27 @@
+  *
+  * The scanout data is then stored until we receive a `UpdateDMABUF` call
+  * so we can pass the damage region to `GdkDmabufTextureBuilder`.
++ *
++ * GDK does not take ownership of the dmabuf file descriptors: they must
++ * stay open until the texture is destroyed. The scanout fd is closed as
++ * soon as the next `ScanoutDMABUF` arrives, which can be before the
++ * texture is built or while it is still being used. So the builder gets a
++ * duplicate (`pending_fd`), and once a texture is built from it the
++ * duplicate belongs to that texture and is closed when GDK destroys it.
+  */
+ 
++static void
++mks_dmabuf_paintable_close_fd (gpointer data)
++{
++  g_close (GPOINTER_TO_INT (data), NULL);
++}
++
+ struct _MksDmabufPaintable
+ {
+   GObject parent_instance;
+   GdkTexture *texture;
+   GdkDmabufTextureBuilder *builder;
++  int pending_fd;
+   guint width;
+   guint height;
+   guint dmabuf_updated : 1;
+@@ -91,19 +109,30 @@ mks_dmabuf_paintable_snapshot (GdkPaintable *paintable,
+ 
+       gdk_dmabuf_texture_builder_set_update_texture (self->builder, self->texture);
+       texture = gdk_dmabuf_texture_builder_build (self->builder,
+-                                                  NULL, NULL, &error);
+-      if (error != NULL)
++                                                  mks_dmabuf_paintable_close_fd,
++                                                  GINT_TO_POINTER (self->pending_fd),
++                                                  &error);
++      if (texture != NULL)
+         {
+-          g_warning ("Failed to build texture: %s", error->message);
+-          return;
++          /* The texture closes the fd when it is destroyed */
++          self->pending_fd = -1;
++          // Clear up the update region to not union it with the next UpdateDMABuf call
++          gdk_dmabuf_texture_builder_set_update_region (self->builder, NULL);
++          g_set_object (&self->texture, texture);
++        }
++      else
++        {
++          /* Keep showing the last frame instead of drawing nothing */
++          g_warning ("Failed to build texture: %s",
++                     error != NULL ? error->message : "unknown error");
++          g_clear_fd (&self->pending_fd, NULL);
+         }
+-      g_assert (texture != NULL);
+-      // Clear up the update region to not union it with the next UpdateDMABuf call
+-      gdk_dmabuf_texture_builder_set_update_region (self->builder, NULL);
+-      g_set_object (&self->texture, texture);
+       self->dmabuf_updated = FALSE;
+     }
+ 
++  if (self->texture == NULL)
++    return;
++
+   area = GRAPHENE_RECT_INIT (0, 0, width, height);
+   gtk_snapshot_append_texture (snapshot, self->texture, &area);
+ }
+@@ -127,6 +156,7 @@ mks_dmabuf_paintable_dispose (GObject *object)
+ 
+   g_clear_object (&self->texture);
+   g_clear_object (&self->builder);
++  g_clear_fd (&self->pending_fd, NULL);
+ 
+   G_OBJECT_CLASS (mks_dmabuf_paintable_parent_class)->dispose (object);
+ }
+@@ -142,6 +172,7 @@ mks_dmabuf_paintable_class_init (MksDmabufPaintableClass *klass)
+ static void
+ mks_dmabuf_paintable_init (MksDmabufPaintable *self)
+ {
++  self->pending_fd = -1;
+ }
+ 
+ gboolean
+@@ -154,6 +185,7 @@ mks_dmabuf_paintable_import (MksDmabufPaintable   *self,
+   cairo_region_t *accumulated_damages;
+   cairo_region_t *previous_region;
+   guint plane = 0;
++  int fd;
+ 
+   g_return_val_if_fail (MKS_IS_DMABUF_PAINTABLE (self), FALSE);
+ 
+@@ -177,6 +209,17 @@ mks_dmabuf_paintable_import (MksDmabufPaintable   *self,
+       return FALSE;
+     }
+ 
++  fd = fcntl (data->dmabuf_fd, F_DUPFD_CLOEXEC, 3);
++  if (fd < 0)
++    {
++      g_set_error (error,
++                   G_IO_ERROR,
++                   g_io_error_from_errno (errno),
++                   "failed to duplicate dmabuf_fd (%d): %s",
++                   data->dmabuf_fd, g_strerror (errno));
++      return FALSE;
++    }
++
+   if (self->width != data->width || self->height != data->height)
+     {
+       self->width = data->width;
+@@ -196,6 +239,8 @@ mks_dmabuf_paintable_import (MksDmabufPaintable   *self,
+         cairo_region_union (accumulated_damages, previous_region);
+     }
+ 
++  /* A builder that was never built is replaced: its fd is not needed */
++  g_clear_fd (&self->pending_fd, NULL);
+   g_clear_object (&self->builder);
+ 
+   self->builder = gdk_dmabuf_texture_builder_new ();
+@@ -204,7 +249,8 @@ mks_dmabuf_paintable_import (MksDmabufPaintable   *self,
+   gdk_dmabuf_texture_builder_set_fourcc (self->builder, data->fourcc);
+   gdk_dmabuf_texture_builder_set_width (self->builder, data->width);
+   gdk_dmabuf_texture_builder_set_height (self->builder, data->height);
+-  gdk_dmabuf_texture_builder_set_fd (self->builder, plane, data->dmabuf_fd);
++  gdk_dmabuf_texture_builder_set_fd (self->builder, plane, fd);
++  self->pending_fd = fd;
+   gdk_dmabuf_texture_builder_set_offset (self->builder, plane, 0);
+   gdk_dmabuf_texture_builder_set_display (self->builder, display);
+   gdk_dmabuf_texture_builder_set_n_planes (self->builder, 1);
+

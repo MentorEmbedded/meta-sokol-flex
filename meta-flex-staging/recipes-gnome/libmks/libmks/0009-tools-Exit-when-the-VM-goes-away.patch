@@ -1,0 +1,102 @@
+From 42e95529a2ae61a6bec14a80855c879ad8f20f1e Mon Sep 17 00:00:00 2001
+From: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+Date: Thu, 22 Oct 2026 10:09:00 +0500
+Subject: [PATCH 09/10] tools: Exit when the VM goes away
+
+When QEMU quit or crashed, the mks windows stayed open. Shown fullscreen
+on a monitor they became black windows covering the compositor's
+desktop on that output until mks was killed.
+
+Watch the VM's name on the bus and the connection itself, and leave the
+main loop when either goes away, so that the windows close and the
+output is handed back. A service manager can now simply restart mks
+together with the VM.
+
+Upstream-Status: Pending
+Signed-off-by: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+---
+ tools/mks.c | 46 ++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 46 insertions(+)
+
+diff --git a/tools/mks.c b/tools/mks.c
+index 5bbfbc4..b12ec73 100644
+--- a/tools/mks.c
++++ b/tools/mks.c
+@@ -182,6 +182,29 @@ on_close_request (GtkWindow *window,
+   return FALSE;
+ }
+ 
++static void
++on_name_vanished (GDBusConnection *connection,
++                  const char      *name,
++                  gpointer         user_data)
++{
++  MksApp *app = user_data;
++
++  g_printerr ("VM went away (%s vanished from the bus), exiting.\n", name);
++  g_main_loop_quit (app->main_loop);
++}
++
++static void
++on_connection_closed (GDBusConnection *connection,
++                      gboolean         remote_peer_vanished,
++                      GError          *error,
++                      gpointer         user_data)
++{
++  MksApp *app = user_data;
++
++  g_printerr ("D-Bus connection closed, exiting.\n");
++  g_main_loop_quit (app->main_loop);
++}
++
+ static void
+ create_window (MksApp     *app,
+                MksScreen  *screen,
+@@ -234,7 +257,10 @@ main (int   argc,
+   MksApp app = { 0 };
+   GtkSettings *settings;
+   const char *address = NULL;
++  const char *bus_name;
+   guint n_monitors = 0;
++  guint watch_id = 0;
++  guint closed_id = 0;
+ 
+   context = g_option_context_new ("[BUS-ADDRESS]");
+   g_option_context_set_summary (context,
+@@ -303,6 +329,21 @@ main (int   argc,
+ 
+   app.main_loop = g_main_loop_new (NULL, FALSE);
+ 
++  /* Exit when the VM goes away (QEMU quit or crashed), so that the windows
++   * disappear and the compositor can show its desktop on those outputs
++   * again, instead of leaving black fullscreen windows behind.
++   */
++  bus_name = mks_session_get_bus_name (session);
++  if (bus_name != NULL)
++    watch_id = g_bus_watch_name_on_connection (connection,
++                                               bus_name,
++                                               G_BUS_NAME_WATCHER_FLAGS_NONE,
++                                               NULL,
++                                               on_name_vanished,
++                                               &app,
++                                               NULL);
++  closed_id = g_signal_connect (connection, "closed", G_CALLBACK (on_connection_closed), &app);
++
+   for (guint i = 0; i < screens->len; i++)
+     {
+       g_autoptr(GdkMonitor) monitor = NULL;
+@@ -315,6 +356,11 @@ main (int   argc,
+ 
+   g_main_loop_run (app.main_loop);
+ 
++  /* The handlers point at "app", which goes away with the main loop */
++  if (watch_id != 0)
++    g_bus_unwatch_name (watch_id);
++  g_signal_handler_disconnect (connection, closed_id);
++
+   g_main_loop_unref (app.main_loop);
+ 
+   return EXIT_SUCCESS;
+-- 
+2.43.0
+

@@ -1,0 +1,282 @@
+From cd409fc8f3ac84883a0e5f0e02180b26dd08cca3 Mon Sep 17 00:00:00 2001
+From: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+Date: Thu, 22 Oct 2026 10:02:00 +0500
+Subject: [PATCH 02/10] framebuffer: Support ABGR8888 and XBGR8888 scanouts
+
+QEMU hands the guest framebuffer to libmks as a pixman image. For
+virtio-gpu R8G8B8A8 resources, as used by Android guests on
+virtio-gpu-rutabaga, the pixman format is PIXMAN_a8b8g8r8. libmks has
+no mapping for it, rejects every Scanout and Update with "Pixman format
+not supported" and the display stays black.
+
+Cairo cannot describe an ABGR layout, but the pixels do not need to be
+converted. Keep them unchanged in a same-sized CAIRO_FORMAT_RGB24
+surface and let MksCairoFramebuffer upload them with an explicit
+GdkMemoryFormat, GDK_MEMORY_R8G8B8X8, which also ignores the alpha
+channel as a display should. This needs GTK 4.14 and a little-endian
+host; elsewhere these formats stay unsupported as before.
+
+Add a "memory-format" construct-only property and
+mks_cairo_framebuffer_new_with_memory_format() to request the format.
+As the same cairo format can now carry different pixel layouts, a new
+framebuffer is also created in Scanout when the format changes, not
+only when the size does (mks_cairo_framebuffer_is_compatible()).
+
+Upstream-Status: Pending
+Signed-off-by: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+---
+ lib/mks-cairo-framebuffer-private.h | 11 ++++++
+ lib/mks-cairo-framebuffer.c         | 56 +++++++++++++++++++++++++++--
+ lib/mks-paintable.c                 | 41 +++++++++++++++------
+ 3 files changed, 95 insertions(+), 13 deletions(-)
+
+diff --git a/lib/mks-cairo-framebuffer-private.h b/lib/mks-cairo-framebuffer-private.h
+index a735ddb..42d49b5 100644
+--- a/lib/mks-cairo-framebuffer-private.h
++++ b/lib/mks-cairo-framebuffer-private.h
+@@ -33,6 +33,17 @@ G_DECLARE_FINAL_TYPE (MksCairoFramebuffer, mks_cairo_framebuffer, MKS, CAIRO_FRA
+ MksCairoFramebuffer *mks_cairo_framebuffer_new        (cairo_format_t       format,
+                                                        guint                width,
+                                                        guint                height);
++MksCairoFramebuffer *mks_cairo_framebuffer_new_with_memory_format
++                                                      (cairo_format_t       format,
++                                                       int                  memory_format,
++                                                       guint                width,
++                                                       guint                height);
++gboolean             mks_cairo_framebuffer_is_compatible
++                                                      (MksCairoFramebuffer *self,
++                                                       cairo_format_t       format,
++                                                       int                  memory_format,
++                                                       guint                width,
++                                                       guint                height);
+ cairo_format_t       mks_cairo_framebuffer_get_format (MksCairoFramebuffer *self);
+ guint                mks_cairo_framebuffer_get_width  (MksCairoFramebuffer *self);
+ guint                mks_cairo_framebuffer_get_height (MksCairoFramebuffer *self);
+diff --git a/lib/mks-cairo-framebuffer.c b/lib/mks-cairo-framebuffer.c
+index 29fe6fa..16cff34 100644
+--- a/lib/mks-cairo-framebuffer.c
++++ b/lib/mks-cairo-framebuffer.c
+@@ -60,6 +60,13 @@ struct _MksCairoFramebuffer
+   cairo_format_t format;
+   GdkMemoryFormat memory_format;
+ 
++  /* A GdkMemoryFormat requested by the creator, or -1 to derive it from
++   * the cairo format. This lets us show guest formats that cairo cannot
++   * express (e.g. ABGR8888): the bytes are stored in a same-sized cairo
++   * surface and merely *interpreted* differently when uploaded to GTK.
++   */
++  int requested_memory_format;
++
+   /* The stride for the framebuffer so that the memory texture
+    * can skip past the rest of the framebuffer data.
+    */
+@@ -86,6 +93,7 @@ enum {
+   PROP_FORMAT,
+   PROP_HEIGHT,
+   PROP_WIDTH,
++  PROP_MEMORY_FORMAT,
+   N_PROPS
+ };
+ 
+@@ -229,6 +237,9 @@ mks_cairo_framebuffer_constructed (GObject *object)
+       return;
+     }
+ 
++  if (self->requested_memory_format >= 0)
++    self->memory_format = self->requested_memory_format;
++
+   self->real_width = self->width;
+   self->real_height = self->height;
+ 
+@@ -299,6 +310,10 @@ mks_cairo_framebuffer_get_property (GObject    *object,
+       g_value_set_uint (value, mks_cairo_framebuffer_get_width (self));
+       break;
+ 
++    case PROP_MEMORY_FORMAT:
++      g_value_set_int (value, self->requested_memory_format);
++      break;
++
+     default:
+       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+     }
+@@ -326,6 +341,10 @@ mks_cairo_framebuffer_set_property (GObject      *object,
+       self->width = g_value_get_uint (value);
+       break;
+ 
++    case PROP_MEMORY_FORMAT:
++      self->requested_memory_format = g_value_get_int (value);
++      break;
++
+     default:
+       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+     }
+@@ -357,6 +376,11 @@ mks_cairo_framebuffer_class_init (MksCairoFramebufferClass *klass)
+                        0, G_MAXUINT, 0,
+                        (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS));
+ 
++  properties[PROP_MEMORY_FORMAT] =
++    g_param_spec_int ("memory-format", NULL, NULL,
++                      -1, G_MAXINT, -1,
++                      (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS));
++
+   g_object_class_install_properties (object_class, N_PROPS, properties);
+ }
+ 
+@@ -364,23 +388,49 @@ static void
+ mks_cairo_framebuffer_init (MksCairoFramebuffer *self)
+ {
+   self->format = CAIRO_FORMAT_RGB24;
++  self->requested_memory_format = -1;
+ }
+ 
+ MksCairoFramebuffer *
+-mks_cairo_framebuffer_new (cairo_format_t format,
+-                           guint          width,
+-                           guint          height)
++mks_cairo_framebuffer_new_with_memory_format (cairo_format_t format,
++                                              int            memory_format,
++                                              guint          width,
++                                              guint          height)
+ {
+   g_return_val_if_fail (width > 0, NULL);
+   g_return_val_if_fail (height > 0, NULL);
+ 
+   return g_object_new (MKS_TYPE_CAIRO_FRAMEBUFFER,
+                        "format", format,
++                       "memory-format", memory_format,
+                        "height", height,
+                        "width", width,
+                        NULL);
+ }
+ 
++MksCairoFramebuffer *
++mks_cairo_framebuffer_new (cairo_format_t format,
++                           guint          width,
++                           guint          height)
++{
++  return mks_cairo_framebuffer_new_with_memory_format (format, -1, width, height);
++}
++
++gboolean
++mks_cairo_framebuffer_is_compatible (MksCairoFramebuffer *self,
++                                     cairo_format_t       format,
++                                     int                  memory_format,
++                                     guint                width,
++                                     guint                height)
++{
++  g_return_val_if_fail (MKS_IS_CAIRO_FRAMEBUFFER (self), FALSE);
++
++  return self->format == format &&
++         self->requested_memory_format == memory_format &&
++         self->width == width &&
++         self->height == height;
++}
++
+ static void
+ flush_and_invalidate_on_destroy (gpointer data)
+ {
+diff --git a/lib/mks-paintable.c b/lib/mks-paintable.c
+index cea07cc..2473814 100644
+--- a/lib/mks-paintable.c
++++ b/lib/mks-paintable.c
+@@ -66,17 +66,36 @@ static GParamSpec *properties [N_PROPS];
+ static guint signals [N_SIGNALS];
+ 
+ /*
+- * Maps a pixman format sent by QEMU to the matching cairo format.
++ * Maps a pixman format sent by QEMU to a cairo format used as backing
++ * storage and, where cairo cannot describe the layout, the GdkMemoryFormat
++ * GTK must use to interpret the same bytes (@memory_format is -1 when it
++ * can be derived from the cairo format).
+  *
+- * Note: CAIRO_FORMAT_ARGB32 is 0, so "unsupported" cannot be signalled
+- * through the return value; a gboolean is returned instead.
++ * Note: CAIRO_FORMAT_ARGB32 is 0, so the result cannot be signalled through
++ * the return value; a gboolean is returned instead.
++ *
++ * ABGR8888 (byte order R,G,B,A) is what Android/gralloc and virtio-gpu
++ * "R8G8B8A8" scanouts use. Cairo has no such format, but the bytes can be
++ * copied unchanged into an RGB24 surface (SOURCE operator, same format) and
++ * be uploaded as R8G8B8X8, ignoring alpha as a display should.
+  */
+ static gboolean
+ _pixman_format_to_cairo_format (guint           pixman_format,
+-                                cairo_format_t *format)
++                                cairo_format_t *format,
++                                int            *memory_format)
+ {
++  *memory_format = -1;
++
+   switch (pixman_format)
+     {
++#if G_BYTE_ORDER == G_LITTLE_ENDIAN && GTK_CHECK_VERSION(4, 14, 0)
++    case PIXMAN_a8b8g8r8:
++    case PIXMAN_x8b8g8r8:
++      *format = CAIRO_FORMAT_RGB24;
++      *memory_format = GDK_MEMORY_R8G8B8X8;
++      return TRUE;
++#endif
++
+ #if _CAIRO_CHECK_VERSION(1, 17, 2)
+     case PIXMAN_rgba_float:
+       *format = CAIRO_FORMAT_RGBA128F;
+@@ -441,6 +460,7 @@ mks_paintable_listener_update (MksPaintable          *self,
+   const guint8 *data;
+   cairo_t *cr;
+   cairo_format_t format = CAIRO_FORMAT_INVALID;
++  int memory_format = -1;
+   gsize data_len;
+ 
+   g_assert (MKS_IS_PAINTABLE (self));
+@@ -448,7 +468,7 @@ mks_paintable_listener_update (MksPaintable          *self,
+   g_assert (MKS_QEMU_IS_LISTENER (listener));
+ 
+   if (!MKS_IS_CAIRO_FRAMEBUFFER (self->child) ||
+-      !_pixman_format_to_cairo_format (pixman_format, &format))
++      !_pixman_format_to_cairo_format (pixman_format, &format, &memory_format))
+     {
+       g_dbus_method_invocation_return_error_literal (invocation,
+                                                      G_IO_ERROR,
+@@ -487,7 +507,7 @@ mks_paintable_listener_update (MksPaintable          *self,
+     {
+       guint max_width = MAX (gdk_paintable_get_intrinsic_width (self->child), x + width);
+       guint max_height = MAX (gdk_paintable_get_intrinsic_height (self->child), y + height);
+-      g_autoptr(MksCairoFramebuffer) framebuffer = mks_cairo_framebuffer_new (format, max_width, max_height);
++      g_autoptr(MksCairoFramebuffer) framebuffer = mks_cairo_framebuffer_new_with_memory_format (format, memory_format, max_width, max_height);
+ 
+       mks_cairo_framebuffer_copy_to (MKS_CAIRO_FRAMEBUFFER (self->child), framebuffer);
+       mks_paintable_set_child (self, GDK_PAINTABLE (framebuffer));
+@@ -522,6 +542,7 @@ mks_paintable_listener_scanout (MksPaintable          *self,
+   const guint8 *data;
+   cairo_t *cr;
+   cairo_format_t format = CAIRO_FORMAT_INVALID;
++  int memory_format = -1;
+   gsize data_len;
+ 
+   g_assert (MKS_IS_PAINTABLE (self));
+@@ -529,7 +550,7 @@ mks_paintable_listener_scanout (MksPaintable          *self,
+   g_assert (MKS_QEMU_IS_LISTENER (listener));
+   g_assert (g_variant_is_of_type (bytestring, G_VARIANT_TYPE_BYTESTRING));
+ 
+-  if (!_pixman_format_to_cairo_format (pixman_format, &format))
++  if (!_pixman_format_to_cairo_format (pixman_format, &format, &memory_format))
+     {
+       g_dbus_method_invocation_return_error_literal (invocation,
+                                                      G_IO_ERROR,
+@@ -552,10 +573,10 @@ mks_paintable_listener_scanout (MksPaintable          *self,
+ 
+   if (self->child == NULL ||
+       !MKS_IS_CAIRO_FRAMEBUFFER (self->child) ||
+-      width != gdk_paintable_get_intrinsic_width (self->child) ||
+-      height != gdk_paintable_get_intrinsic_height (self->child))
++      !mks_cairo_framebuffer_is_compatible (MKS_CAIRO_FRAMEBUFFER (self->child),
++                                            format, memory_format, width, height))
+     {
+-      g_autoptr(MksCairoFramebuffer) child = mks_cairo_framebuffer_new (format, width, height);
++      g_autoptr(MksCairoFramebuffer) child = mks_cairo_framebuffer_new_with_memory_format (format, memory_format, width, height);
+ 
+       mks_paintable_set_child (self, GDK_PAINTABLE (child));
+     }
+-- 
+2.43.0
+

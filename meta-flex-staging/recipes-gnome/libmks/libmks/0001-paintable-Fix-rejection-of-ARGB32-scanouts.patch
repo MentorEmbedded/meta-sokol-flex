@@ -1,0 +1,122 @@
+From a0491bb0729b411217857b68081fea1194d6d4b9 Mon Sep 17 00:00:00 2001
+From: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+Date: Thu, 22 Oct 2026 10:01:00 +0500
+Subject: [PATCH 01/10] paintable: Fix rejection of ARGB32 scanouts
+
+_pixman_format_to_cairo_format() reports an unsupported pixman format
+by returning 0. CAIRO_FORMAT_ARGB32 is also 0, so the callers in the
+Scanout and Update handlers could not tell it from "unsupported" and
+answered every PIXMAN_a8r8g8b8 scanout with "Pixman format not
+supported". ARGB32 was the only supported format affected.
+
+Return a gboolean and hand the cairo format back through a pointer, so
+that all supported formats, ARGB32 included, are accepted.
+
+Upstream-Status: Pending
+Signed-off-by: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+---
+ lib/mks-paintable.c | 45 ++++++++++++++++++++++++++++++---------------
+ 1 file changed, 30 insertions(+), 15 deletions(-)
+
+diff --git a/lib/mks-paintable.c b/lib/mks-paintable.c
+index 42b2f71..cea07cc 100644
+--- a/lib/mks-paintable.c
++++ b/lib/mks-paintable.c
+@@ -65,32 +65,47 @@ enum {
+ static GParamSpec *properties [N_PROPS];
+ static guint signals [N_SIGNALS];
+ 
+-static cairo_format_t
+-_pixman_format_to_cairo_format (guint pixman_format)
++/*
++ * Maps a pixman format sent by QEMU to the matching cairo format.
++ *
++ * Note: CAIRO_FORMAT_ARGB32 is 0, so "unsupported" cannot be signalled
++ * through the return value; a gboolean is returned instead.
++ */
++static gboolean
++_pixman_format_to_cairo_format (guint           pixman_format,
++                                cairo_format_t *format)
+ {
+   switch (pixman_format)
+     {
+ #if _CAIRO_CHECK_VERSION(1, 17, 2)
+     case PIXMAN_rgba_float:
+-      return CAIRO_FORMAT_RGBA128F;
++      *format = CAIRO_FORMAT_RGBA128F;
++      return TRUE;
+     case PIXMAN_rgb_float:
+-      return CAIRO_FORMAT_RGB96F;
++      *format = CAIRO_FORMAT_RGB96F;
++      return TRUE;
+ #endif
+ 
+     case PIXMAN_a8r8g8b8:
+-      return CAIRO_FORMAT_ARGB32;
++      *format = CAIRO_FORMAT_ARGB32;
++      return TRUE;
+     case PIXMAN_x2r10g10b10:
+-      return CAIRO_FORMAT_RGB30;
++      *format = CAIRO_FORMAT_RGB30;
++      return TRUE;
+     case PIXMAN_x8r8g8b8:
+-      return CAIRO_FORMAT_RGB24;
++      *format = CAIRO_FORMAT_RGB24;
++      return TRUE;
+     case PIXMAN_a8:
+-      return CAIRO_FORMAT_A8;
++      *format = CAIRO_FORMAT_A8;
++      return TRUE;
+     case PIXMAN_a1:
+-      return CAIRO_FORMAT_A1;
++      *format = CAIRO_FORMAT_A1;
++      return TRUE;
+     case PIXMAN_r5g6b5:
+-      return CAIRO_FORMAT_RGB16_565;
++      *format = CAIRO_FORMAT_RGB16_565;
++      return TRUE;
+     default:
+-      return 0;
++      return FALSE;
+   }
+ }
+ 
+@@ -425,7 +440,7 @@ mks_paintable_listener_update (MksPaintable          *self,
+   cairo_surface_t *source;
+   const guint8 *data;
+   cairo_t *cr;
+-  cairo_format_t format;
++  cairo_format_t format = CAIRO_FORMAT_INVALID;
+   gsize data_len;
+ 
+   g_assert (MKS_IS_PAINTABLE (self));
+@@ -433,7 +448,7 @@ mks_paintable_listener_update (MksPaintable          *self,
+   g_assert (MKS_QEMU_IS_LISTENER (listener));
+ 
+   if (!MKS_IS_CAIRO_FRAMEBUFFER (self->child) ||
+-      !(format = _pixman_format_to_cairo_format (pixman_format)))
++      !_pixman_format_to_cairo_format (pixman_format, &format))
+     {
+       g_dbus_method_invocation_return_error_literal (invocation,
+                                                      G_IO_ERROR,
+@@ -506,7 +521,7 @@ mks_paintable_listener_scanout (MksPaintable          *self,
+   cairo_surface_t *source;
+   const guint8 *data;
+   cairo_t *cr;
+-  cairo_format_t format;
++  cairo_format_t format = CAIRO_FORMAT_INVALID;
+   gsize data_len;
+ 
+   g_assert (MKS_IS_PAINTABLE (self));
+@@ -514,7 +529,7 @@ mks_paintable_listener_scanout (MksPaintable          *self,
+   g_assert (MKS_QEMU_IS_LISTENER (listener));
+   g_assert (g_variant_is_of_type (bytestring, G_VARIANT_TYPE_BYTESTRING));
+ 
+-  if (!(format = _pixman_format_to_cairo_format (pixman_format)))
++  if (!_pixman_format_to_cairo_format (pixman_format, &format))
+     {
+       g_dbus_method_invocation_return_error_literal (invocation,
+                                                      G_IO_ERROR,
+-- 
+2.43.0
+

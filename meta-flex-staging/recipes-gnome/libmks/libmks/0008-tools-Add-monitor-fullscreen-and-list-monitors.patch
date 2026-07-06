@@ -1,0 +1,189 @@
+From 9296e2c3f9e77bd6b4b2af44c572ffcc93ae830e Mon Sep 17 00:00:00 2001
+From: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+Date: Thu, 22 Oct 2026 10:08:00 +0500
+Subject: [PATCH 08/10] tools: Add --monitor, --fullscreen and --list-monitors
+
+A Wayland client cannot position its own windows, so there was no way
+to make a VM show up on the same monitor every time. xdg-shell does let
+a toplevel ask for fullscreen on a given output.
+
+ - --monitor=CONNECTOR (repeatable) shows the n-th screen fullscreen on
+   the monitor with that connector name, for example Virtual-3.
+ - --fullscreen shows the windows fullscreen on an output of the
+   compositor's choice.
+ - --list-monitors prints the connector name and geometry of every
+   monitor and exits.
+
+An unknown connector is a fatal error that lists the available ones,
+reported before any window is created, so a window never silently ends
+up on another monitor.
+
+Upstream-Status: Pending
+Signed-off-by: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+---
+ tools/mks.c | 94 +++++++++++++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 91 insertions(+), 3 deletions(-)
+
+diff --git a/tools/mks.c b/tools/mks.c
+index 0189496..5bbfbc4 100644
+--- a/tools/mks.c
++++ b/tools/mks.c
+@@ -20,6 +20,7 @@
+ 
+ #include "config.h"
+ 
++#include <stdio.h>
+ #include <stdlib.h>
+ #include <unistd.h>
+ 
+@@ -32,12 +33,21 @@ typedef struct
+   guint      n_windows;
+ } MksApp;
+ 
++static gboolean   opt_fullscreen;
++static gboolean   opt_list_monitors;
+ static gboolean   opt_no_auto_resize;
++static char     **opt_monitors;
+ static char     **opt_heads;
+ 
+ static const GOptionEntry entries[] = {
++  { "fullscreen", 'f', 0, G_OPTION_ARG_NONE, &opt_fullscreen,
++    "Show the windows fullscreen", NULL },
++  { "monitor", 'm', 0, G_OPTION_ARG_STRING_ARRAY, &opt_monitors,
++    "Show the next screen fullscreen on this monitor (repeatable, in screen order)", "CONNECTOR" },
+   { "head", 'H', 0, G_OPTION_ARG_STRING_ARRAY, &opt_heads,
+     "Only show this guest display head (repeatable, default: all)", "N" },
++  { "list-monitors", 'l', 0, G_OPTION_ARG_NONE, &opt_list_monitors,
++    "List the monitor connector names and exit", NULL },
+   { "no-auto-resize", 0, 0, G_OPTION_ARG_NONE, &opt_no_auto_resize,
+     "Do not resize the guest display to the window size", NULL },
+   { NULL }
+@@ -71,6 +81,43 @@ update_title_binding (GBinding     *binding,
+   return TRUE;
+ }
+ 
++static GdkMonitor *
++find_monitor (const char *connector)
++{
++  GListModel *monitors = gdk_display_get_monitors (gdk_display_get_default ());
++  guint n_monitors = g_list_model_get_n_items (monitors);
++
++  for (guint i = 0; i < n_monitors; i++)
++    {
++      g_autoptr(GdkMonitor) monitor = g_list_model_get_item (monitors, i);
++      const char *name = gdk_monitor_get_connector (monitor);
++
++      if (name != NULL && g_str_equal (name, connector))
++        return g_steal_pointer (&monitor);
++    }
++
++  return NULL;
++}
++
++static void
++print_monitors (FILE *stream)
++{
++  GListModel *monitors = gdk_display_get_monitors (gdk_display_get_default ());
++  guint n_monitors = g_list_model_get_n_items (monitors);
++
++  for (guint i = 0; i < n_monitors; i++)
++    {
++      g_autoptr(GdkMonitor) monitor = g_list_model_get_item (monitors, i);
++      const char *name = gdk_monitor_get_connector (monitor);
++      GdkRectangle geometry;
++
++      gdk_monitor_get_geometry (monitor, &geometry);
++      fprintf (stream, "  %s  %dx%d+%d+%d\n",
++               name != NULL ? name : "(unnamed)",
++               geometry.width, geometry.height, geometry.x, geometry.y);
++    }
++}
++
+ static gboolean
+ head_selected (guint number)
+ {
+@@ -136,8 +183,9 @@ on_close_request (GtkWindow *window,
+ }
+ 
+ static void
+-create_window (MksApp    *app,
+-               MksScreen *screen)
++create_window (MksApp     *app,
++               MksScreen  *screen,
++               GdkMonitor *monitor)
+ {
+   GtkWindow *window;
+   GtkWidget *display;
+@@ -157,6 +205,14 @@ create_window (MksApp    *app,
+   g_signal_connect (window, "close-request", G_CALLBACK (on_close_request), app);
+   app->n_windows++;
+ 
++  /* Wayland clients cannot position windows, but they can ask to be
++   * fullscreen on a specific output. That is what pins a window to a head.
++   */
++  if (monitor != NULL)
++    gtk_window_fullscreen_on_monitor (window, monitor);
++  else if (opt_fullscreen)
++    gtk_window_fullscreen (window);
++
+   gtk_window_present (window);
+ 
+   surface = gtk_native_get_surface (GTK_NATIVE (window));
+@@ -178,6 +234,7 @@ main (int   argc,
+   MksApp app = { 0 };
+   GtkSettings *settings;
+   const char *address = NULL;
++  guint n_monitors = 0;
+ 
+   context = g_option_context_new ("[BUS-ADDRESS]");
+   g_option_context_set_summary (context,
+@@ -197,6 +254,30 @@ main (int   argc,
+   gtk_init ();
+   mks_init ();
+ 
++  if (opt_list_monitors)
++    {
++      print_monitors (stdout);
++      return EXIT_SUCCESS;
++    }
++
++  /* Fail early and loudly if a requested monitor does not exist, so a
++   * window never silently ends up on the wrong head.
++   */
++  if (opt_monitors != NULL)
++    n_monitors = g_strv_length (opt_monitors);
++
++  for (guint i = 0; i < n_monitors; i++)
++    {
++      g_autoptr(GdkMonitor) monitor = find_monitor (opt_monitors[i]);
++
++      if (monitor == NULL)
++        {
++          g_printerr ("Unknown monitor '%s'. Available monitors:\n", opt_monitors[i]);
++          print_monitors (stderr);
++          return EXIT_FAILURE;
++        }
++    }
++
+   if (!(connection = create_connection (address, &error)))
+     {
+       g_printerr ("Failed to connect to D-Bus: %s\n", error->message);
+@@ -223,7 +304,14 @@ main (int   argc,
+   app.main_loop = g_main_loop_new (NULL, FALSE);
+ 
+   for (guint i = 0; i < screens->len; i++)
+-    create_window (&app, g_ptr_array_index (screens, i));
++    {
++      g_autoptr(GdkMonitor) monitor = NULL;
++
++      if (i < n_monitors)
++        monitor = find_monitor (opt_monitors[i]);
++
++      create_window (&app, g_ptr_array_index (screens, i), monitor);
++    }
+ 
+   g_main_loop_run (app.main_loop);
+ 
+-- 
+2.43.0
+

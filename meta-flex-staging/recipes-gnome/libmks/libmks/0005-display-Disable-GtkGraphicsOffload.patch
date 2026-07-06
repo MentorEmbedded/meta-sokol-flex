@@ -1,0 +1,45 @@
+From 09e3b9ab2652f33d188c9319d216fd861315321e Mon Sep 17 00:00:00 2001
+From: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+Date: Thu, 22 Oct 2026 10:05:00 +0500
+Subject: [PATCH 05/10] display: Disable GtkGraphicsOffload
+
+MksDisplay wraps its picture in a GtkGraphicsOffload, which lets GTK
+pass the guest's dmabuf to the compositor as a subsurface buffer. With
+Weston 15 on a virtio-gpu/virgl host the compositor refuses such a
+buffer with a fatal protocol error, and the client is disconnected:
+"Error 71 (Protocol error) dispatching to Wayland display".
+
+Keep the widget but turn offloading off, so that GTK imports the buffer
+through its renderer instead. That is still a GPU import without a CPU
+copy; only the direct hand-over to the compositor is given up.
+
+Upstream-Status: Inappropriate [workaround for a compositor/driver dmabuf problem]
+Signed-off-by: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+---
+ lib/mks-display.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/lib/mks-display.c b/lib/mks-display.c
+index e33108f..f47b9a8 100644
+--- a/lib/mks-display.c
++++ b/lib/mks-display.c
+@@ -417,6 +417,16 @@ mks_display_init (MksDisplay *self)
+   priv->resizer = mks_screen_resizer_new ();
+ 
+   priv->offload = gtk_graphics_offload_new (GTK_WIDGET (priv->picture));
++
++  /* Do not hand guest dmabufs directly to the Wayland compositor as
++   * subsurface buffers. Some compositor/driver combinations (e.g. Weston on
++   * a virtio-gpu/virgl host) cannot import dmabufs exported by another GL
++   * context and answer with a fatal wl_display protocol error, which kills
++   * the client ("Error 71 dispatching to Wayland display"). GTK then
++   * imports the buffer itself through the renderer instead.
++   */
++  gtk_graphics_offload_set_enabled (GTK_GRAPHICS_OFFLOAD (priv->offload),
++                                    GTK_GRAPHICS_OFFLOAD_DISABLED);
+   gtk_widget_set_parent (priv->offload, GTK_WIDGET (self));
+ 
+   controller = gtk_event_controller_legacy_new ();
+-- 
+2.43.0
+

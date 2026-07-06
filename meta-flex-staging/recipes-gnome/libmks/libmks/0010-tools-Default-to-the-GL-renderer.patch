@@ -1,0 +1,38 @@
+From e64147e241f5744b38094e305efa4596da89d4e5 Mon Sep 17 00:00:00 2001
+From: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+Date: Thu, 22 Oct 2026 10:10:00 +0500
+Subject: [PATCH 10/10] tools: Default to the GL renderer
+
+With GTK 4.22 the default GSK renderer is Vulkan. On the Xen dom0
+target (virtio-gpu guests, Weston) mks dumps core with it and only works
+with GSK_RENDERER=gl in the environment.
+
+Set GSK_RENDERER=gl before GTK is initialised, without overriding a
+value the user exported, so that no environment setup is needed.
+
+Upstream-Status: Inappropriate [workaround for a renderer problem on the target stack]
+Signed-off-by: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+---
+ tools/mks.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/tools/mks.c b/tools/mks.c
+index b12ec73..56766c8 100644
+--- a/tools/mks.c
++++ b/tools/mks.c
+@@ -277,6 +277,12 @@ main (int   argc,
+   if (argc > 1)
+     address = argv[1];
+ 
++  /* GTK 4.22 picks its Vulkan renderer by default, which crashes while it
++   * imports the guest's dmabuf scanouts (virtio-gpu / Venus hosts). Use the
++   * GL renderer unless the user explicitly chose one with GSK_RENDERER.
++   */
++  g_setenv ("GSK_RENDERER", "gl", FALSE);
++
+   gtk_init ();
+   mks_init ();
+ 
+-- 
+2.43.0
+
