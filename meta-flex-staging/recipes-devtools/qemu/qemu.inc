@@ -79,6 +79,8 @@ SRC_URI = "git://github.com/qemu/qemu.git;protocol=https;branch=stable-10.2;subm
            file://xen-pvh/0004-hw-xen-hvm-Add-a-mapcache-arg-to-xen_register_ioreq.patch \
            file://xen-pvh/0005-hw-xen-xenpvh-Add-prop-to-enable-disable-the-mapcach.patch \
            file://xen-pvh/0006-system-xen-Constify-various-MemoryRegion-arguments.patch \
+           file://virtio-gpu/0001-virtio-gpu-Handle-virgl-fence-creation-errors.patch \
+           file://virtio-gpu/0002-virtio-gpu-Support-asynchronous-fencing.patch \
            file://fix-strerrorname_np.patch \
            file://0001-qemu-Add-addition-environment-space-to-boot-loader-q.patch \
            file://0002-apic-fixup-fallthrough-to-PIC.patch \

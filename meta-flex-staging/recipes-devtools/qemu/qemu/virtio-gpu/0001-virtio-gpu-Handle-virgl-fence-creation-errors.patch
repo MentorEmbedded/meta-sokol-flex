@@ -1,0 +1,76 @@
+From adaf3aca290dc117ff47c2222e9c42f704092b54 Mon Sep 17 00:00:00 2001
+From: Dmitry Osipenko <dmitry.osipenko@collabora.com>
+Date: Wed, 4 Mar 2026 16:50:32 +0000
+Subject: [PATCH 1/2] virtio-gpu: Handle virgl fence creation errors
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Print out error messages when virgl fence creation fails to aid debugging
+of the fence-related bugs.
+
+Reviewed-by: Akihiko Odaki <akihiko.odaki@daynix.com>
+Acked-by: Michael S. Tsirkin <mst@redhat.com>
+Tested-by: Alex Bennée <alex.bennee@linaro.org>
+Acked-by: Pierre-Eric Pelloux-Prayer <pierre-eric.pelloux-prayer@amd.com>
+Reviewed-by: Yiwei Zhang <zzyiwei@gmail.com>
+Tested-by: Yiwei Zhang <zzyiwei@gmail.com>
+Signed-off-by: Dmitry Osipenko <dmitry.osipenko@collabora.com>
+Message-ID: <20260303151422.977399-9-dmitry.osipenko@collabora.com>
+Message-ID: <20260304165043.1437519-11-alex.bennee@linaro.org>
+Signed-off-by: Alex Bennée <alex.bennee@linaro.org>
+---
+ hw/display/virtio-gpu-virgl.c | 27 ++++++++++++++++++++++-----
+ 1 file changed, 22 insertions(+), 5 deletions(-)
+
+diff --git a/hw/display/virtio-gpu-virgl.c b/hw/display/virtio-gpu-virgl.c
+index 1129301d91..ca5b616bb6 100644
+--- a/hw/display/virtio-gpu-virgl.c
++++ b/hw/display/virtio-gpu-virgl.c
+@@ -900,6 +900,7 @@ void virtio_gpu_virgl_process_cmd(VirtIOGPU *g,
+                                       struct virtio_gpu_ctrl_command *cmd)
+ {
+     bool cmd_suspended = false;
++    int ret;
+ 
+     VIRTIO_GPU_FILL_CMD(cmd->cmd_hdr);
+ 
+@@ -1000,14 +1001,30 @@ void virtio_gpu_virgl_process_cmd(VirtIOGPU *g,
+     trace_virtio_gpu_fence_ctrl(cmd->cmd_hdr.fence_id, cmd->cmd_hdr.type);
+ #if VIRGL_VERSION_MAJOR >= 1
+     if (cmd->cmd_hdr.flags & VIRTIO_GPU_FLAG_INFO_RING_IDX) {
+-        virgl_renderer_context_create_fence(cmd->cmd_hdr.ctx_id,
+-                                            VIRGL_RENDERER_FENCE_FLAG_MERGEABLE,
+-                                            cmd->cmd_hdr.ring_idx,
+-                                            cmd->cmd_hdr.fence_id);
++        const uint32_t flags = VIRGL_RENDERER_FENCE_FLAG_MERGEABLE;
++
++        ret = virgl_renderer_context_create_fence(cmd->cmd_hdr.ctx_id, flags,
++                                                  cmd->cmd_hdr.ring_idx,
++                                                  cmd->cmd_hdr.fence_id);
++        if (ret) {
++            qemu_log_mask(LOG_GUEST_ERROR,
++                          "%s: virgl_renderer_context_create_fence error: %s",
++                          __func__, strerror(-ret));
++        }
+         return;
+     }
+ #endif
+-    virgl_renderer_create_fence(cmd->cmd_hdr.fence_id, cmd->cmd_hdr.type);
++
++    /*
++     * Unlike other virglrenderer functions, this one returns a positive
++     * error code.
++     */
++    ret = virgl_renderer_create_fence(cmd->cmd_hdr.fence_id, 0);
++    if (ret) {
++        qemu_log_mask(LOG_GUEST_ERROR,
++                      "%s: virgl_renderer_create_fence error: %s",
++                      __func__, strerror(ret));
++    }
+ }
+ 
+ static void virgl_write_fence(void *opaque, uint32_t fence)
+-- 
+2.34.1
+
