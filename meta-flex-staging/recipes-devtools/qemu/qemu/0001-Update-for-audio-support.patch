@@ -1,36 +1,72 @@
 From 49cd6f6d0b318eabd0df62931d28214b21255b15 Mon Sep 17 00:00:00 2001
 From: Dave Cook <dave.cook@siemens.com>
 Date: Mon, 23 Jun 2025 10:31:02 -0600
-Subject: [PATCH 1/1] Update for audio support
+Subject: [PATCH] Update for audio support
 
-- Use the configured qemu pipewire device input and output names as the node names. We can then uniquely identify them when multiple VPs are running
-- Qemu-side fix for AT1-4141 - Audio : volume control / mute not working in audio
-- Fix for AT1-4429 Warnings in QEMU audio device after change to add support for controls
+- Use the configured qemu pipewire device input and output names as
+  the node names. We can then uniquely identify them when multiple
+  VMs are running.
+- Add target properties to use command line to connect input and
+  output streams directly.
+- Audio : volume control / mute not working in audio
 
 Upstream-Status: Inappropriate [custom implementation]
 ---
- audio/pwaudio.c               |   5 +
+ audio/pwaudio.c               |  16 +-
  hw/audio/trace-events         |   5 +-
  hw/audio/virtio-snd.c         | 377 +++++++++++++++++++++++++++++++++-
  include/hw/audio/virtio-snd.h |   5 +
- 4 files changed, 387 insertions(+), 5 deletions(-)
+ qapi/audio.json               |   5 +-
+ 5 files changed, 398 insertions(+), 10 deletions(-)
 
 diff --git a/audio/pwaudio.c b/audio/pwaudio.c
 index a59c22e60b..90ca81831a 100644
 --- a/audio/pwaudio.c
 +++ b/audio/pwaudio.c
+@@ -424,7 +424,8 @@ pw_to_audfmt(enum spa_audio_format fmt, bool *big_endian,
+ 
+ static int
+ qpw_stream_new(AudioPw *c, PWVoice *v, const char *stream_name,
+-               const char *name, enum spa_direction dir)
++               const char *name, const char *target,
++               enum spa_direction dir)
+ {
+     int res;
+     uint32_t n_params;
 @@ -448,7 +449,14 @@ qpw_stream_new(AudioPw *c, PWVoice *v, const char *stream_name,
  
      trace_pw_period(buf_samples, v->info.rate);
      if (name) {
-+        /* Siemens: For ANA audio work, we need to uniquely identify the virtual
-+           platform nodes - use the 'name' property that we set via the QEMU
-+           command line as the node name */
+-        pw_properties_set(props, PW_KEY_TARGET_OBJECT, name);
++        /* Use the configured per-direction name as the PipeWire node name
++         * so multiple virtual platforms can be uniquely identified.
++         */
 +        pw_properties_set(props, PW_KEY_NODE_NAME, name);
++    }
 +
-         pw_properties_set(props, PW_KEY_TARGET_OBJECT, name);
++    if (target) {
++        pw_properties_set(props, PW_KEY_TARGET_OBJECT, target);
      }
      v->stream = pw_stream_new(c->core, stream_name, props);
+     if (v->stream == NULL) {
+@@ -548,7 +556,7 @@ qpw_init_out(HWVoiceOut *hw, struct audsettings *as)
+ 
+     /* call the function that creates a new stream for playback */
+     r = qpw_stream_new(c, v, ppdo->stream_name ?: AUDIO_MIXENG_BACKEND(c)->dev->id,
+-                       ppdo->name, SPA_DIRECTION_OUTPUT);
++                       ppdo->name, ppdo->target, SPA_DIRECTION_OUTPUT);
+     if (r < 0) {
+         pw_thread_loop_unlock(c->thread_loop);
+         return -1;
+@@ -592,7 +600,7 @@ qpw_init_in(HWVoiceIn *hw, struct audsettings *as)
+ 
+     /* call the function that creates a new stream for recording */
+     r = qpw_stream_new(c, v, ppdo->stream_name ? : AUDIO_MIXENG_BACKEND(c)->dev->id,
+-                       ppdo->name, SPA_DIRECTION_INPUT);
++                       ppdo->name, ppdo->target, SPA_DIRECTION_INPUT);
+     if (r < 0) {
+         pw_thread_loop_unlock(c->thread_loop);
+         return -1;
 diff --git a/hw/audio/trace-events b/hw/audio/trace-events
 index 30f5921545..b4f0e45e9b 100644
 --- a/hw/audio/trace-events
@@ -515,6 +551,26 @@ index e28f1be5db..8f3f70d6e9 100644
      /*
       * Convenience queue to keep track of invalid tx/rx queue messages inside
       * the tx/rx callbacks.
--- 
-2.34.1
-
+diff --git a/qapi/audio.json b/qapi/audio.json
+index 2df87b9710..c6c7c1a1f3 100644
+--- a/qapi/audio.json
++++ b/qapi/audio.json
+@@ -362,6 +362,8 @@
+ #
+ # @latency: latency you want PipeWire to achieve in microseconds
+ #     (default 46000)
++# @target: PipeWire target object name to which this stream should
++#     connect
+ #
+ # Since: 8.1
+ ##
+@@ -370,7 +372,8 @@
+   'data': {
+     '*name': 'str',
+     '*stream-name': 'str',
+-    '*latency': 'uint32' } }
++    '*latency': 'uint32',
++    '*target': 'str' } }
+ 
+ ##
+ # @AudiodevPipewireOptions:
