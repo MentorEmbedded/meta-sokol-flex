@@ -1,0 +1,95 @@
+From 7323e08ca67caa3892e2d3b794b3d33337828c29 Mon Sep 17 00:00:00 2001
+From: Roger Pau Monne <roger.pau@citrix.com>
+Date: Tue, 24 Mar 2026 14:48:28 +0100
+Subject: [PATCH 4/5] xen/mm: do not assign pages to a domain until they are
+ scrubbed
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Assigning pages to a domain make them the possible target of hypercalls
+like XENMEM_decrease_reservation ahead of such pages being scrubbed in
+populate_physmap() when the guest is running in PV mode.  This might allow
+pages to be freed ahead of being scrubbed for example, as a stubdomain
+already running could target them by guessing their MFNs.  It's also
+possible other action could set the page type ahead of scrubbing, which
+would be problematic.
+
+Prevent the pages pending scrub from being assigned to the domain, and only
+do the assign once the scrubbing has finished.  This has the disadvantage
+that the allocated pages will be removed from the free pool, but not yet
+accounted towards the domain consumed page quota.  However there can only
+be one stashed page in that state, and it's maximum size is bounded by the
+memop-max-order option.  This is not too different from the current logic,
+where assigning pages to a domain (and thus checking whether such domain
+doesn't overflow it's quota) is also done after the memory has been
+allocated and removed from the pool of free pages.
+
+Fixes: 83a784a15b47 ("xen/mm: allow deferred scrub of physmap populate allocated pages")
+Reported-by: Jan Beulich <jbeulich@suse.com>
+Signed-off-by: Roger Pau Monné <roger.pau@citrix.com>
+Reviewed-by: Jan Beulich <jbeulich@suse.com>
+---
+ xen/common/memory.c     | 6 ++++++
+ xen/common/page_alloc.c | 9 ++++++++-
+ xen/include/xen/mm.h    | 7 ++++++-
+ 3 files changed, 20 insertions(+), 2 deletions(-)
+
+diff --git a/xen/common/memory.c b/xen/common/memory.c
+index 0685438961..8bec12a7d8 100644
+--- a/xen/common/memory.c
++++ b/xen/common/memory.c
+@@ -388,6 +388,12 @@ static void populate_physmap(struct memop_args *a)
+                             goto out;
+                         }
+                     }
++
++                    if ( assign_page(page, a->extent_order, d, memflags) )
++                    {
++                        free_domheap_pages(page, a->extent_order);
++                        goto out;
++                    }
+                 }
+ 
+                 if ( unlikely(a->memflags & MEMF_no_tlbflush) )
+diff --git a/xen/common/page_alloc.c b/xen/common/page_alloc.c
+index 1316dfbd15..b1edef8712 100644
+--- a/xen/common/page_alloc.c
++++ b/xen/common/page_alloc.c
+@@ -2713,7 +2713,14 @@ struct page_info *alloc_domheap_pages(
+                 pg[i].count_info |= PGC_extra;
+             }
+         }
+-        if ( assign_page(pg, order, d, memflags) )
++        /*
++         * Don't add pages with the PGC_need_scrub bit set to the domain, the
++         * caller must clean the bit and then manually call assign_pages().
++         * Otherwise pages still subject to scrubbing would be reachable using
++         * get_page().
++         */
++        if ( !(memflags & MEMF_keep_scrub) &&
++             assign_page(pg, order, d, memflags) )
+         {
+             free_heap_pages(pg, order, memflags & MEMF_no_scrub);
+             return NULL;
+diff --git a/xen/include/xen/mm.h b/xen/include/xen/mm.h
+index abbcfffe7c..6c75733d35 100644
+--- a/xen/include/xen/mm.h
++++ b/xen/include/xen/mm.h
+@@ -208,7 +208,12 @@ struct npfec {
+ #define  MEMF_no_refcount (1U<<_MEMF_no_refcount)
+ #define _MEMF_populate_on_demand 1
+ #define  MEMF_populate_on_demand (1U<<_MEMF_populate_on_demand)
+-/* MEMF_keep_scrub is only valid when specified together with MEMF_no_scrub. */
++/*
++ * MEMF_keep_scrub is only valid when specified together with MEMF_no_scrub.
++ * Allocations with this flag never assign the pages to the domain, the caller
++ * must call assign_page() after the PGC_need_scrub bit is cleared if
++ * required.
++ */
+ #define _MEMF_keep_scrub  2
+ #define  MEMF_keep_scrub  (1U << _MEMF_keep_scrub)
+ #define _MEMF_no_dma      3
+-- 
+2.34.1
+
