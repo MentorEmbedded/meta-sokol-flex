@@ -7,7 +7,10 @@ device hardware."
 
 IMAGE_FEATURES:append = " \
     codebench-debug \
-    debug-tweaks \
+    allow-empty-password \
+	allow-root-login \
+	empty-root-password \
+	post-install-logging \
     package-management \
     ssh-server-openssh \
 "
