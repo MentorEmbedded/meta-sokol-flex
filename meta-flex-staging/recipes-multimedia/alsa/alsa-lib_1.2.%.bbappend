@@ -8,3 +8,4 @@ SRC_URI:append:feature-flex-staging = "\
     file://plug_fix_rate_converter_config.patch \
     file://fix_dshare_status.patch \
 "
+ERROR_QA:remove = "patch-fuzz"

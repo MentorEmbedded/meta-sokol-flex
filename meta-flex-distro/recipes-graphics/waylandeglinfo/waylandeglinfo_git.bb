@@ -19,3 +19,8 @@ LIC_FILES_CHKSUM = "file://COPYING;md5=1c45a60ed9e3db41ec069e422044577e"
 DEPENDS = "virtual/egl wayland"
 
 inherit cmake pkgconfig
+
+# Fix cmake 4.3 dropping <3.5 support
+do_configure:prepend() {
+    sed -i "s/cmake_minimum_required(VERSION 3.1)/cmake_minimum_required(VERSION 3.5)/" ${S}/CMakeLists.txt
+}
