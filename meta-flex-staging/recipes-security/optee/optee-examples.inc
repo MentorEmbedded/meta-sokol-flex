@@ -44,3 +44,5 @@ FILES:${PN} += "${nonarch_base_libdir}/optee_armtz/ \
 # Imports machine specific configs from staging to build
 PACKAGE_ARCH = "${MACHINE_ARCH}"
 EXTRA_OECMAKE:append = " -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+
+EXTRA_OECMAKE:append = " -DCMAKE_POLICY_VERSION_MINIMUM=3.5"

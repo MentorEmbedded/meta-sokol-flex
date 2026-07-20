@@ -5,7 +5,7 @@ HOMEPAGE = "https://www.op-tee.org/"
 LICENSE = "BSD-2-Clause"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=69663ab153298557a59c67a60a743e5b"
 
-inherit systemd update-rc.d cmake
+inherit systemd cmake
 
 SRC_URI = " \
     git://github.com/OP-TEE/optee_client.git;branch=master;protocol=https \
@@ -37,3 +37,14 @@ SYSTEMD_SERVICE:${PN} = "tee-supplicant@.service"
 INITSCRIPT_PACKAGES = "${PN}"
 INITSCRIPT_NAME:${PN} = "tee-supplicant"
 INITSCRIPT_PARAMS:${PN} = "start 10 1 2 3 4 5 . stop 90 0 6 ."
+
+SYSTEMD_AUTO_ENABLE:${PN} = "disable"
+
+pkg_postinst_ontarget:${PN} () {
+    if type systemctl >/dev/null 2>/dev/null; then
+        systemctl daemon-reload
+        systemctl enable tee-supplicant@.service
+        systemctl --no-block restart tee-supplicant@.service
+    fi
+}
+EXTRA_OECMAKE:append = " -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
