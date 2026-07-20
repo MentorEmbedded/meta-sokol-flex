@@ -12,7 +12,6 @@ SRC_URI = " \
     file://0001-waylandes2info-Try-higher-GL-ES-profiles.patch \
 "
 
-S = "${WORKDIR}/git"
 
 
 LICENSE = "MIT"

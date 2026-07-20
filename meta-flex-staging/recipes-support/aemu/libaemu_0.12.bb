@@ -12,7 +12,6 @@ DEPENDS = "cmake-native"
 
 REQUIRED_DISTRO_FEATURES = "vulkan"
 
-S = "${WORKDIR}/git"
 
 # Extra cmake options for libaemu
 EXTRA_OECMAKE = "\

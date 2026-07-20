@@ -21,7 +21,6 @@ UPSTREAM_CHECK_GITTAGREGEX = "v(?P<pver>(\d+(\.\d+)+))"
 
 SRCREV = "6a08c39e3a91ef385e76515cfad86aca4bfd57ff"
 
-S = "${WORKDIR}/git"
 
 inherit cmake
 

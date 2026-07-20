@@ -6,7 +6,7 @@ SUMMARY = "Relocate makefile fragments and environment-setup.d"
 LICENSE = "MIT"
 BASEDEPENDS = ""
 
-S = "${WORKDIR}"
+S = "${UNPACKDIR}"
 
 inherit nativesdk
 

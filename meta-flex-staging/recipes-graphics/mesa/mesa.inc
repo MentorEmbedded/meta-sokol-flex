@@ -25,7 +25,6 @@ SRC_URI = "git://gitlab.freedesktop.org/mesa/mesa.git;protocol=https;branch=25.2
 "
 
 SRCREV = "461196a1c827769168304ff3f5b36360f16618ca"
-S = "${WORKDIR}/git"
 
 #because we cannot rely on the fact that all apps will use pkgconfig,
 #make eglplatform.h independent of MESA_EGL_NO_X11_HEADER

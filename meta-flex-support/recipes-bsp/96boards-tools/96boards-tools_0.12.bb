@@ -13,7 +13,6 @@ SRCREV = "52ad42bb74ba4b3fcece2483f0d496494d60715f"
 SRC_URI = "git://github.com/96boards/96boards-tools;branch=master;protocol=https\
            file://resize-helper.sh.in"
 
-S = "${WORKDIR}/git"
 
 inherit systemd allarch update-rc.d
 
@@ -31,7 +30,7 @@ do_install () {
 
     if ${@bb.utils.contains('DISTRO_FEATURES', 'sysvinit', 'true', 'false', d)}; then
         install -d ${D}${sysconfdir}/init.d
-        install -m 0755 ${WORKDIR}/resize-helper.sh.in ${D}${sysconfdir}/init.d/resize-helper.sh
+        install -m 0755 ${UNPACKDIR}/resize-helper.sh.in ${D}${sysconfdir}/init.d/resize-helper.sh
         sed -i -e "s:@bindir@:${bindir}:; s:@sbindir@:${sbindir}:; s:@sysconfdir@:${sysconfdir}:" \
             ${D}${sysconfdir}/init.d/resize-helper.sh
     fi

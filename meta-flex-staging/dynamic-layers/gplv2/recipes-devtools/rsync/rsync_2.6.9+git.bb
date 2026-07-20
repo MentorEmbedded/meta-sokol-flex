@@ -17,10 +17,9 @@ SRC_URI = "git://git.samba.org/rsync.git;protocol=https;branch=master \
 SRCREV = "496c809f8cf529c5a95f9578b34a9299b0d92ffb"
 PV .= "${SRCPV}"
 
-S = "${WORKDIR}/git"
 
 do_configure:prepend () {
-    install ${WORKDIR}/addrinfo.h ${S}/lib/
+    install ${UNPACKDIR}/addrinfo.h ${S}/lib/
 }
 
 do_configure:append () {

@@ -15,7 +15,7 @@ SRC_URI = "http://tofrodos.sourceforge.net/download/tofrodos-${PV}.tar.gz \
 SRC_URI[md5sum] = "219c03d7c58975b335cdb5201338125a"
 SRC_URI[sha256sum] = "3098af78325486b99116c65c9f9bbbbfb3dfbeab1ab1e63a8da79550a5af6a08"
 
-S = "${WORKDIR}/tofrodos/src"
+S = "${UNPACKDIR}/tofrodos/src"
 
 inherit native
 

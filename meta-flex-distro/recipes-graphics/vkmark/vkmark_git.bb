@@ -22,7 +22,6 @@ DEPENDS += " \
 
 REQUIRED_DISTRO_FEATURES = "vulkan"
 
-S = "${WORKDIR}/git"
 
 SRCREV = "2bf2ca7f1623db7ad7840a4dd626444d11830815"
 
