@@ -12,4 +12,5 @@ SRC_URI:append:innexis-linux = "\
 	file://pidof.cfg \
 	file://top.cfg \
     file://base64.cfg \
+    file://ifconfig.cfg \
 "
