@@ -1,0 +1,123 @@
+From 00b376a2a40634d601d42392973e4ecd9b408b0a Mon Sep 17 00:00:00 2001
+From: Roger Pau Monne <roger.pau@citrix.com>
+Date: Tue, 24 Mar 2026 14:26:47 +0100
+Subject: [PATCH 3/5] xen/mm: don't unconditionally clear PGC_need_scrub in
+ alloc_heap_pages()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+alloc_heap_pages() will unconditionally clear PGC_need_scrub, even when
+MEMF_no_scrub is requested.  This is kind of expected as otherwise some
+callers will assert on seeing non-expected flags set on the count_info
+field.
+
+Introduce a new MEMF bit to signal to alloc_heap_pages() that non-scrubbed
+pages should keep the PGC_need_scrub bit set. This fixes returning dirty
+pages from alloc_domheap_pages() without the PGC_need_scrub bit set for
+populate_physmap() to consume.
+
+With the above change alloc_domheap_pages() needs an adjustment to cope
+with allocated pages possibly having the PGC_need_scrub set.
+
+Fixes: 83a784a15b47 ("xen/mm: allow deferred scrub of physmap populate allocated pages")
+Reported-by: Ayden Bottos <aydenbottos12@gmail.com>
+Signed-off-by: Roger Pau Monné <roger.pau@citrix.com>
+Reviewed-by: Jan Beulich <jbeulich@suse.com>
+---
+ xen/common/memory.c     |  3 ++-
+ xen/common/page_alloc.c | 31 ++++++++++++++++++++++---------
+ xen/include/xen/mm.h    |  3 +++
+ 3 files changed, 27 insertions(+), 10 deletions(-)
+
+diff --git a/xen/common/memory.c b/xen/common/memory.c
+index 9240a6005e..0685438961 100644
+--- a/xen/common/memory.c
++++ b/xen/common/memory.c
+@@ -345,7 +345,8 @@ static void populate_physmap(struct memop_args *a)
+                 unsigned int scrub_start = 0;
+                 unsigned int memflags =
+                     a->memflags | (d->creation_finished ? 0
+-                                                        : MEMF_no_scrub);
++                                                        : (MEMF_no_scrub |
++                                                           MEMF_keep_scrub));
+                 nodeid_t node =
+                     (a->memflags & MEMF_exact_node) ? MEMF_get_node(a->memflags)
+                                                     : NUMA_NO_NODE;
+diff --git a/xen/common/page_alloc.c b/xen/common/page_alloc.c
+index 588b5b99cb..1316dfbd15 100644
+--- a/xen/common/page_alloc.c
++++ b/xen/common/page_alloc.c
+@@ -989,6 +989,8 @@ static struct page_info *alloc_heap_pages(
+     ASSERT(zone_lo <= zone_hi);
+     ASSERT(zone_hi < NR_ZONES);
+ 
++    ASSERT(!(memflags & MEMF_keep_scrub) || (memflags & MEMF_no_scrub));
++
+     if ( unlikely(order > MAX_ORDER) )
+         return NULL;
+ 
+@@ -1110,17 +1112,26 @@ static struct page_info *alloc_heap_pages(
+     {
+         bool cold = d && d != current->domain;
+ 
+-        for ( i = 0; i < (1U << order); i++ )
++        if ( !(memflags & MEMF_no_scrub) )
+         {
+-            if ( test_and_clear_bit(_PGC_need_scrub, &pg[i].count_info) )
++            for ( i = 0; i < (1U << order); i++ )
+             {
+-                if ( !(memflags & MEMF_no_scrub) )
++                if ( test_and_clear_bit(_PGC_need_scrub, &pg[i].count_info) )
++                {
+                     scrub_one_page(&pg[i], cold);
+-
+-                dirty_cnt++;
++                    dirty_cnt++;
++                }
++                else
++                    check_one_page(&pg[i]);
+             }
+-            else if ( !(memflags & MEMF_no_scrub) )
+-                check_one_page(&pg[i]);
++        }
++        else
++        {
++            for ( i = 0; i < (1U << order); i++ )
++                if ( (memflags & MEMF_keep_scrub)
++                     ? test_bit(_PGC_need_scrub, &pg[i].count_info)
++                     : test_and_clear_bit(_PGC_need_scrub, &pg[i].count_info) )
++                    dirty_cnt++;
+         }
+ 
+         if ( dirty_cnt )
+@@ -2696,8 +2707,10 @@ struct page_info *alloc_domheap_pages(
+ 
+             for ( i = 0; i < (1UL << order); i++ )
+             {
+-                ASSERT(!pg[i].count_info);
+-                pg[i].count_info = PGC_extra;
++                ASSERT(!(pg[i].count_info &
++                         ~((memflags & MEMF_keep_scrub) ? PGC_need_scrub
++                                                        : 0UL)));
++                pg[i].count_info |= PGC_extra;
+             }
+         }
+         if ( assign_page(pg, order, d, memflags) )
+diff --git a/xen/include/xen/mm.h b/xen/include/xen/mm.h
+index 49c34248f9..abbcfffe7c 100644
+--- a/xen/include/xen/mm.h
++++ b/xen/include/xen/mm.h
+@@ -208,6 +208,9 @@ struct npfec {
+ #define  MEMF_no_refcount (1U<<_MEMF_no_refcount)
+ #define _MEMF_populate_on_demand 1
+ #define  MEMF_populate_on_demand (1U<<_MEMF_populate_on_demand)
++/* MEMF_keep_scrub is only valid when specified together with MEMF_no_scrub. */
++#define _MEMF_keep_scrub  2
++#define  MEMF_keep_scrub  (1U << _MEMF_keep_scrub)
+ #define _MEMF_no_dma      3
+ #define  MEMF_no_dma      (1U<<_MEMF_no_dma)
+ #define _MEMF_exact_node  4
+-- 
+2.34.1
+

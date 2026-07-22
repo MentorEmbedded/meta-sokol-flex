@@ -1,0 +1,72 @@
+From 9ccf02586b5679dd258de6dbca6f41d10ad5cbb4 Mon Sep 17 00:00:00 2001
+From: Bernhard Kaindl <bernhard.kaindl@citrix.com>
+Date: Fri, 5 Jun 2026 10:08:42 +0200
+Subject: [PATCH 5/5] xen/mm: Fix off-by-one preventing tail merge in
+ reserve_offlined_page()
+
+reserve_offlined_page() reserves pages marked for offlining and
+returns free buddies from the remaining healthy tail pages back
+to the free list.
+
+Consider an order-2 buddy (4 pages) with the following layout:
++---------------+---------------+---------------+---------------+
+| head page       tail page 1,    tail page 2     tail page 3   |
+| PFN_ORDER(pg)   marked as to                                  |
+| == 2            be offlined                                   |
++---------------+---------------+---------------+---------------+
+
+The expected result after removing tail page 1 and returning the
+remaining healthy pages to the free list would be:
+
++---------------+               +---------------+---------------+
+| single page   | offlined page | head page       tail page     |
+| PFN_ORDER(pg) | not returned  | PFN_ORDER(pg)                 |
+| == 0          | to the heap   | == 1                          |
++---------------+               +---------------+---------------+
+
+A trivial off-by-one error in the growth loop stops the growth loop
+early before the tail end of the original buddy and we end up with:
+
++---------------+               +---------------+---------------+
+| single page   | offlined page | single page   | single page   |
+| PFN_ORDER(pg) | not returned  | PFN_ORDER(pg) | PFN_ORDER(pg) |
+| == 0          | to the heap   | == 0          | == 0          |
++---------------+               +---------------+---------------+
+
+If the offlined page was in a much larger buddy, this would lead
+to much more memory not available for higher order allocations
+requiring the full tail end of the original buddy for allocation.
+
+Fix the growth loop to correctly grow the buddy to the tail end
+to make the full allocation unit available for future allocation.
+
+Fixes: e4865c2315 ('Page offline support in Xen side')
+Signed-off-by: Bernhard Kaindl <bernhard.kaindl@citrix.com>
+Reviewed-by: Jan Beulich <jbeulich@suse.com>
+Release-Acked-by: Oleksii Kurochko <oleksii.kurochko@gmail.com>
+---
+ xen/common/page_alloc.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/xen/common/page_alloc.c b/xen/common/page_alloc.c
+index b1edef8712..ea563f17fc 100644
+--- a/xen/common/page_alloc.c
++++ b/xen/common/page_alloc.c
+@@ -1194,11 +1194,13 @@ static int reserve_offlined_page(struct page_info *head)
+ 
+         next_order = cur_order = 0;
+ 
++        /* Attempt to grow the order (size) of the buddy as much as possible. */
+         while ( cur_order < head_order )
+         {
+             next_order = cur_order + 1;
+ 
+-            if ( (cur_head + (1 << next_order)) >= (head + ( 1 << head_order)) )
++            /* Do not grow to next_order if it would go beyond the buddy. */
++            if ( (cur_head + (1 << next_order)) > (head + (1 << head_order)) )
+                 goto merge;
+ 
+             for ( i = (1 << cur_order), pg = cur_head + (1 << cur_order );
+-- 
+2.34.1
+

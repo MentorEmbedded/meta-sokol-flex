@@ -1,0 +1,35 @@
+From 360efa7fad0838c3d326b3adbec50c14aa36eee3 Mon Sep 17 00:00:00 2001
+From: "Rivers, Mark (DI SW CAS ES TOB)" <mark.rivers@siemens.com>
+Date: Tue, 20 Jan 2026 15:41:31 +0100
+Subject: [PATCH] AT1-7236-flickering-rutabaga
+
+---
+ hw/display/virtio-gpu-rutabaga.c | 13 ++++++++++++-
+ 1 file changed, 13 insertions(+)
+
+diff --git a/hw/display/virtio-gpu-rutabaga.c b/hw/display/virtio-gpu-rutabaga.c
+index ed5ae52acbee..3a458950500d 100644
+--- a/hw/display/virtio-gpu-rutabaga.c
++++ b/hw/display/virtio-gpu-rutabaga.c
+@@ -331,7 +331,18 @@ rutabaga_cmd_set_scanout(VirtIOGPU *g, struct virtio_gpu_ctrl_command *cmd)
+ 
+     /* realloc the surface ptr */
+     scanout->ds = qemu_create_displaysurface_pixman(res->image);
+-    dpy_gfx_replace_surface(scanout->con, NULL);
++
++    /*
++     * The rutabaga scanout path previously called
++     * dpy_gfx_replace_surface(con, NULL) immediately before installing the
++     * new pixman surface, which forces a temporary placeholder surface
++     * switch (“Display output is not active.”) and can manifest as a transient
++     * black/NULL frame. We already create a fresh DisplaySurface via
++     * qemu_create_displaysurface_pixman() when setting scanout and then replace
++     * the console surface, which tears down the previous surface; the
++     * intermediate NULL/placeholder hop is redundant and adds an extra switch
++     * with no functional benefit.
++     */
+     dpy_gfx_replace_surface(scanout->con, scanout->ds);
+     res->scanout_bitmask = ss.scanout_id;
+ }
+-- 
+GitLab

@@ -1,0 +1,292 @@
+From a1d1568bff923feced51943274d998a13403fc64 Mon Sep 17 00:00:00 2001
+From: Roger Pau Monne <roger.pau@citrix.com>
+Date: Mon, 12 Jan 2026 16:18:59 +0100
+Subject: [PATCH 2/5] xen/mm: allow deferred scrub of physmap populate
+ allocated pages
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Physmap population has the need to use pages as big as possible to reduce
+p2m shattering.  However that triggers issues when big enough pages are not
+yet scrubbed, and so scrubbing must be done at allocation time.  On some
+scenarios with added contention the watchdog can trigger:
+
+Watchdog timer detects that CPU55 is stuck!
+----[ Xen-4.17.5-21  x86_64  debug=n  Not tainted ]----
+CPU:    55
+RIP:    e008:[<ffff82d040204c4a>] clear_page_sse2+0x1a/0x30
+RFLAGS: 0000000000000202   CONTEXT: hypervisor (d0v12)
+[...]
+Xen call trace:
+   [<ffff82d040204c4a>] R clear_page_sse2+0x1a/0x30
+   [<ffff82d04022a121>] S clear_domain_page+0x11/0x20
+   [<ffff82d04022c170>] S common/page_alloc.c#alloc_heap_pages+0x400/0x5a0
+   [<ffff82d04022d4a7>] S alloc_domheap_pages+0x67/0x180
+   [<ffff82d040226f9f>] S common/memory.c#populate_physmap+0x22f/0x3b0
+   [<ffff82d040228ec8>] S do_memory_op+0x728/0x1970
+
+Introduce a mechanism to preempt page scrubbing in populate_physmap().  It
+relies on stashing the dirty page in the domain struct temporarily to
+preempt to guest context, so the scrubbing can resume when the domain
+re-enters the hypercall.  The added deferral mechanism will only be used for
+domain construction, and is designed to be used with a single threaded
+domain builder.  If the toolstack makes concurrent calls to
+XENMEM_populate_physmap for the same target domain it will trash stashed
+pages, resulting in slow domain physmap population.
+
+Note a similar issue is present in increase reservation.  However that
+hypercall is likely to only be used once the domain is already running and
+the known implementations use 4K pages. It will be deal with in a separate
+patch using a different approach, that will also take care of the
+allocation in populate_physmap() once the domain is running.
+
+Fixes: 74d2e11ccfd2 ("mm: Scrub pages in alloc_heap_pages() if needed")
+Signed-off-by: Roger Pau Monné <roger.pau@citrix.com>
+Reviewed-by: Jan Beulich <jbeulich@suse.com>
+---
+ xen/common/domain.c     |  23 +++++++++
+ xen/common/memory.c     | 105 +++++++++++++++++++++++++++++++++++++++-
+ xen/common/page_alloc.c |   2 +-
+ xen/include/xen/mm.h    |  10 ++++
+ xen/include/xen/sched.h |   5 ++
+ 5 files changed, 143 insertions(+), 2 deletions(-)
+
+diff --git a/xen/common/domain.c b/xen/common/domain.c
+index 88db82d187..75c7da16e2 100644
+--- a/xen/common/domain.c
++++ b/xen/common/domain.c
+@@ -582,6 +582,18 @@ static int __init cf_check parse_dom0_param(const char *s)
+ }
+ custom_param("dom0", parse_dom0_param);
+ 
++static void domain_pending_scrub_free(struct domain *d)
++{
++    rspin_lock(&d->page_alloc_lock);
++    if ( d->pending_scrub )
++    {
++        FREE_DOMHEAP_PAGES(d->pending_scrub, d->pending_scrub_order);
++        d->pending_scrub_order = 0;
++        d->pending_scrub_index = 0;
++    }
++    rspin_unlock(&d->page_alloc_lock);
++}
++
+ /*
+  * Release resources held by a domain.  There may or may not be live
+  * references to the domain, and it may or may not be fully constructed.
+@@ -643,6 +655,7 @@ static int domain_teardown(struct domain *d)
+ 
+         /* Trivial teardown, not long-running enough to need a preemption check. */
+         domain_llc_coloring_free(d);
++        domain_pending_scrub_free(d);
+ 
+     PROGRESS(gnttab_mappings):
+         rc = gnttab_release_mappings(d);
+@@ -686,6 +699,7 @@ static void _domain_destroy(struct domain *d)
+ {
+     BUG_ON(!d->is_dying);
+     BUG_ON(atomic_read(&d->refcnt) != DOMAIN_DESTROYED);
++    ASSERT(!d->pending_scrub);
+ 
+     xfree(d->pbuf);
+ 
+@@ -1651,6 +1665,15 @@ int domain_unpause_by_systemcontroller(struct domain *d)
+      */
+     if ( new == 0 && !d->creation_finished )
+     {
++        if ( d->pending_scrub )
++        {
++            printk(XENLOG_ERR
++                   "%pd: cannot be started with pending unscrubbed pages, destroying\n",
++                   d);
++            domain_crash(d);
++            domain_pending_scrub_free(d);
++            return -EBUSY;
++        }
+         d->creation_finished = true;
+         arch_domain_creation_finished(d);
+     }
+diff --git a/xen/common/memory.c b/xen/common/memory.c
+index 10becf7c1f..9240a6005e 100644
+--- a/xen/common/memory.c
++++ b/xen/common/memory.c
+@@ -159,6 +159,73 @@ static void increase_reservation(struct memop_args *a)
+     a->nr_done = i;
+ }
+ 
++/*
++ * Temporary storage for a domain assigned page that's not been fully scrubbed.
++ * Stored pages must be domheap ones.
++ *
++ * The stashed page can be freed at any time by Xen, the caller must pass the
++ * order and NUMA node requirement to the fetch function to ensure the
++ * currently stashed page matches it's requirements.
++ */
++static void stash_allocation(struct domain *d, struct page_info *page,
++                             unsigned int order, unsigned int scrub_index)
++{
++    rspin_lock(&d->page_alloc_lock);
++
++    /*
++     * Drop the passed page in preference for the already stashed one.  This
++     * interface is designed to be used for single-threaded domain creation.
++     */
++    if ( d->pending_scrub || d->is_dying )
++        free_domheap_pages(page, order);
++    else
++    {
++        d->pending_scrub_index = scrub_index;
++        d->pending_scrub_order = order;
++        d->pending_scrub = page;
++    }
++
++    rspin_unlock(&d->page_alloc_lock);
++}
++
++static struct page_info *get_stashed_allocation(struct domain *d,
++                                                unsigned int order,
++                                                nodeid_t node,
++                                                unsigned int *scrub_index)
++{
++    struct page_info *page = NULL;
++
++    rspin_lock(&d->page_alloc_lock);
++
++    /*
++     * If there's a pending page to scrub check if it satisfies the current
++     * request.  If it doesn't free it and return NULL.
++     */
++    if ( d->pending_scrub )
++    {
++        if ( d->pending_scrub_order == order &&
++             (node == NUMA_NO_NODE || node == page_to_nid(d->pending_scrub)) )
++        {
++            page = d->pending_scrub;
++            *scrub_index = d->pending_scrub_index;
++        }
++        else
++            free_domheap_pages(d->pending_scrub, d->pending_scrub_order);
++
++        /*
++         * The caller now owns the page or it has been freed, clear stashed
++         * information.  Prevent concurrent usages of get_stashed_allocation()
++         * from returning the same page to different contexts.
++         */
++        d->pending_scrub_index = 0;
++        d->pending_scrub_order = 0;
++        d->pending_scrub = NULL;
++    }
++
++    rspin_unlock(&d->page_alloc_lock);
++    return page;
++}
++
+ static void populate_physmap(struct memop_args *a)
+ {
+     struct page_info *page;
+@@ -275,7 +342,19 @@ static void populate_physmap(struct memop_args *a)
+             }
+             else
+             {
+-                page = alloc_domheap_pages(d, a->extent_order, a->memflags);
++                unsigned int scrub_start = 0;
++                unsigned int memflags =
++                    a->memflags | (d->creation_finished ? 0
++                                                        : MEMF_no_scrub);
++                nodeid_t node =
++                    (a->memflags & MEMF_exact_node) ? MEMF_get_node(a->memflags)
++                                                    : NUMA_NO_NODE;
++
++                page = get_stashed_allocation(d, a->extent_order, node,
++                                              &scrub_start);
++
++                if ( !page )
++                    page = alloc_domheap_pages(d, a->extent_order, memflags);
+ 
+                 if ( unlikely(!page) )
+                 {
+@@ -286,6 +365,30 @@ static void populate_physmap(struct memop_args *a)
+                     goto out;
+                 }
+ 
++                if ( memflags & MEMF_no_scrub )
++                {
++                    unsigned int dirty_cnt = 0;
++
++                    /* Check if there's anything to scrub. */
++                    for ( j = scrub_start; j < (1U << a->extent_order); j++ )
++                    {
++                        if ( !test_and_clear_bit(_PGC_need_scrub,
++                                                 &page[j].count_info) )
++                            continue;
++
++                        scrub_one_page(&page[j], true);
++
++                        if ( (j + 1) != (1U << a->extent_order) &&
++                             !(++dirty_cnt & 0xff) &&
++                             hypercall_preempt_check() )
++                        {
++                            a->preempted = 1;
++                            stash_allocation(d, page, a->extent_order, j + 1);
++                            goto out;
++                        }
++                    }
++                }
++
+                 if ( unlikely(a->memflags & MEMF_no_tlbflush) )
+                 {
+                     for ( j = 0; j < (1U << a->extent_order); j++ )
+diff --git a/xen/common/page_alloc.c b/xen/common/page_alloc.c
+index 2ee249ac36..588b5b99cb 100644
+--- a/xen/common/page_alloc.c
++++ b/xen/common/page_alloc.c
+@@ -792,7 +792,7 @@ static void page_list_add_scrub(struct page_info *pg, unsigned int node,
+ # define scrub_page_cold clear_page_cold
+ #endif
+ 
+-static void scrub_one_page(const struct page_info *pg, bool cold)
++void scrub_one_page(const struct page_info *pg, bool cold)
+ {
+     void *ptr;
+ 
+diff --git a/xen/include/xen/mm.h b/xen/include/xen/mm.h
+index b968f47b87..49c34248f9 100644
+--- a/xen/include/xen/mm.h
++++ b/xen/include/xen/mm.h
+@@ -145,6 +145,16 @@ unsigned long avail_node_heap_pages(unsigned int nodeid);
+ #define alloc_domheap_page(d,f) (alloc_domheap_pages(d,0,f))
+ #define free_domheap_page(p)  (free_domheap_pages(p,0))
+ 
++/* Free an allocation, and zero the pointer to it. */
++#define FREE_DOMHEAP_PAGES(p, o) do { \
++    void *_ptr_ = (p);                \
++    (p) = NULL;                       \
++    free_domheap_pages(_ptr_, o);     \
++} while ( false )
++#define FREE_DOMHEAP_PAGE(p) FREE_DOMHEAP_PAGES(p, 0)
++
++void scrub_one_page(const struct page_info *pg, bool cold);
++
+ int online_page(mfn_t mfn, uint32_t *status);
+ int offline_page(mfn_t mfn, int broken, uint32_t *status);
+ int query_page_offline(mfn_t mfn, uint32_t *status);
+diff --git a/xen/include/xen/sched.h b/xen/include/xen/sched.h
+index 610f3d4c0d..c89b930cbd 100644
+--- a/xen/include/xen/sched.h
++++ b/xen/include/xen/sched.h
+@@ -662,6 +662,11 @@ struct domain
+         /* Permission to take ownership of the physical console input. */
+         bool input_allowed;
+     } console;
++
++    /* Pointer to allocated domheap page that possibly needs scrubbing. */
++    struct page_info *pending_scrub;
++    unsigned int pending_scrub_order;
++    unsigned int pending_scrub_index;
+ } __aligned(PAGE_SIZE);
+ 
+ static inline struct page_list_head *page_to_list(
+-- 
+2.34.1
+

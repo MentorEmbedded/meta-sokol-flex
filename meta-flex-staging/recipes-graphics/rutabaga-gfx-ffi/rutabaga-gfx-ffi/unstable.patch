@@ -1,0 +1,23 @@
+diff --git a/ffi/src/include/rutabaga_gfx_ffi.h b/ffi/src/include/rutabaga_gfx_ffi.h
+index d9a7b0d..e5ce450 100644
+--- a/ffi/src/include/rutabaga_gfx_ffi.h
++++ b/ffi/src/include/rutabaga_gfx_ffi.h
+@@ -123,6 +123,8 @@ extern "C" {
+ 
+ #endif
+ 
++#define RUTABAGA_GFX_FFI_UNSTABLE 1
++
+ struct rutabaga;
+ 
+ struct rutabaga_create_blob {
+diff --git a/ffi/Cargo.toml b/ffi/Cargo.toml
+index f655511..4ba0c05 100644
+--- a/ffi/Cargo.toml
++++ b/ffi/Cargo.toml
+@@ -20,4 +20,5 @@ log = "0.4"
+ [features]
+ gbm = ["rutabaga_gfx/gbm"]
+ gfxstream = ["rutabaga_gfx/gfxstream"]
++virgl_renderer = ["rutabaga_gfx/virgl_renderer"]
+ vulkano = ["rutabaga_gfx/vulkano"]

@@ -1,0 +1,71 @@
+From: Michael Tokarev <mjt@tls.msk.ru>
+Subject: Fixup references to NVIDIA CUDA headers
+Date: Fri, 30 Aug 2024 13:06:48 +0300
+Forwarded: not-needed
+
+aemu ships old NVIDIA CUDA header files in third-party/cuda/,
+and these headers are not distributable.  In later versions,
+NVIDIA released these headers under Expat license, and that
+version is already included in debian in libffmpeg-nvenc-dev
+package.  Replace references to local headers with includes
+of files from this package.
+
+diff --git a/Android.bp b/Android.bp
+index f579940..5ca0261 100644
+--- a/Android.bp
++++ b/Android.bp
+@@ -37,5 +37,4 @@ cc_library_headers {
+         "host-common/include",
+         "snapshot/include",
+-        "third-party/cuda/include",
+     ],
+     apex_available: [
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 4de86a4..be7a41d 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -106,5 +106,4 @@ if(AEMU_COMMON_GEN_PKGCONFIG)
+     install(DIRECTORY snapshot/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/aemu/snapshot)
+     install(DIRECTORY host-common/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/aemu/host-common)
+-    install(DIRECTORY third-party/cuda/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/aemu/host-common)
+     set(INSTALL_TARGETS
+         aemu-base
+diff --git a/host-common/include/host-common/MediaCudaDriverHelper.h b/host-common/include/host-common/MediaCudaDriverHelper.h
+index 82e425a..4971ed6 100644
+--- a/host-common/include/host-common/MediaCudaDriverHelper.h
++++ b/host-common/include/host-common/MediaCudaDriverHelper.h
+@@ -22,6 +22,6 @@
+ 
+ extern "C" {
+-#include "host-common/dynlink_cuda.h"
+-#include "host-common/dynlink_nvcuvid.h"
++#include <ffnvcodec/dynlink_cuda.h>
++#include <ffnvcodec/dynlink_nvcuvid.h>
+ }
+ #include <stdio.h>
+diff --git a/host-common/include/host-common/MediaCudaUtils.h b/host-common/include/host-common/MediaCudaUtils.h
+index 835b17d..ff2f082 100644
+--- a/host-common/include/host-common/MediaCudaUtils.h
++++ b/host-common/include/host-common/MediaCudaUtils.h
+@@ -18,6 +18,6 @@
+ 
+ extern "C" {
+-#include "host-common/dynlink_cuda.h"
+-#include "host-common/dynlink_nvcuvid.h"
++#include <ffnvcodec/dynlink_cuda.h>
++#include <ffnvcodec/dynlink_nvcuvid.h>
+ }
+ #include <stdio.h>
+diff --git a/host-common/include/host-common/MediaCudaVideoHelper.h b/host-common/include/host-common/MediaCudaVideoHelper.h
+index fadaa76..4f64c70 100644
+--- a/host-common/include/host-common/MediaCudaVideoHelper.h
++++ b/host-common/include/host-common/MediaCudaVideoHelper.h
+@@ -27,6 +27,6 @@
+ 
+ extern "C" {
+-#include "host-common/dynlink_cuda.h"
+-#include "host-common/dynlink_nvcuvid.h"
++#include <ffnvcodec/dynlink_cuda.h>
++#include <ffnvcodec/dynlink_nvcuvid.h>
+ }
+ #include <stdio.h>

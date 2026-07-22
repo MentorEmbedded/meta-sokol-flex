@@ -1,0 +1,291 @@
+From 106323bc15c7eb89a033cf8ff38f52bca8a4b53c Mon Sep 17 00:00:00 2001
+From: Joel May <git@jmay.us>
+Date: Wed, 9 Apr 2025 17:54:25 -0700
+Subject: [PATCH] Fix arm64 advanced prefetcher
+
+https://gitlab.freedesktop.org/pixman/pixman/-/issues/119
+
+When the advanced preloader reached the end of a scanline, it advanced
+the `PF_SRC`, `PF_DST`, and `PF_MASK` addresses by 1 instead of
+advancing to the next scanline.
+
+Most of the time, this means the prefetcher is simply prefetching the
+wrong place in the image.  But when the stride is negative, this can
+result in a segfault when trying to read memory beyond the end of the
+image buffer.
+
+I have fixed this by combining the bitshift and add instructions to
+directly update the address register by the correct amount before
+prefetching.
+
+My fix results in the same behavior as the code in
+`pixman/pixman-arm-neon-asm.h`:
+```
+    PF ldrbge, DUMMY, [PF_SRC, SRC_STRIDE, lsl #src_bpp_shift]!
+```
+This instruction means that `PF_SRC` is updated with the offset of
+`SRC_STRIDE << #src_bpp_shift` and then the byte at updated `PF_SRC` is
+read into `DUMMY`.  (The `ge` condition has been replaced with a
+separate branch instruction in aarch64.)
+
+I also cleaned up a couple other cases where instructions were
+redundant.
+
+Upstream-Status: Backport
+---
+ pixman/pixman-arma64-neon-asm.S | 95 +++++++++++++--------------------
+ pixman/pixman-arma64-neon-asm.h | 21 +++-----
+ 2 files changed, 46 insertions(+), 70 deletions(-)
+
+diff --git a/pixman/pixman-arma64-neon-asm.S b/pixman/pixman-arma64-neon-asm.S
+index 774d98d..e2e266d 100644
+--- a/pixman/pixman-arma64-neon-asm.S
++++ b/pixman/pixman-arma64-neon-asm.S
+@@ -305,16 +305,14 @@
+         mov         v28.d[0], v14.d[0]
+         mov         v29.d[0], v14.d[1]
+                                     PF ble 10f
+-                                    PF lsl DUMMY, SRC_STRIDE, #src_bpp_shift
+-                                    PF ldrsb DUMMY, [PF_SRC, DUMMY]
+-                                    PF add PF_SRC, PF_SRC, #1
++                                    PF add PF_SRC, PF_SRC, SRC_STRIDE, lsl #src_bpp_shift
++                                    PF ldrsb DUMMY, [PF_SRC]
+ 10:
+     raddhn      v20.8b, v10.8h, v17.8h
+     raddhn      v23.8b, v11.8h, v19.8h
+                                     PF ble 10f
+-                                    PF lsl DUMMY, DST_STRIDE, #dst_bpp_shift
+-                                    PF ldrsb DUMMY, [PF_DST, DUMMY]
+-                                    PF add PF_DST, PF_SRC, #1
++                                    PF add PF_DST, PF_DST, DST_STRIDE, lsl #dst_bpp_shift
++                                    PF ldrsb DUMMY, [PF_DST]
+ 10:
+     raddhn      v22.8b, v12.8h, v18.8h
+         st1         {v14.8h}, [DST_W], #16
+@@ -497,9 +495,8 @@ generate_composite_function \
+     ushll       v14.8h, v2.8b, #7
+     sli         v14.8h, v14.8h, #1
+                                     PF ble 10f
+-                                    PF lsl DUMMY, SRC_STRIDE, #src_bpp_shift
+-                                    PF ldrsb DUMMY, [PF_SRC, DUMMY]
+-                                    PF add PF_SRC, PF_SRC, #1
++                                    PF add PF_SRC, PF_SRC, SRC_STRIDE, lsl #src_bpp_shift
++                                    PF ldrsb DUMMY, [PF_SRC]
+ 10:
+     ushll       v9.8h, v0.8b, #7
+     sli         v9.8h, v9.8h, #1
+@@ -585,12 +582,10 @@ generate_composite_function \
+ 10:
+     uqadd       v28.8b, v0.8b, v4.8b
+                                     PF ble 10f
+-                                    PF lsl DUMMY, SRC_STRIDE, #src_bpp_shift
+-                                    PF ldrsb DUMMY, [PF_SRC, DUMMY]
+-                                    PF add PF_SRC, PF_SRC, #1
+-                                    PF lsl DUMMY, DST_STRIDE, #dst_bpp_shift
+-                                    PF ldrsb DUMMY, [PF_DST, DUMMY]
+-                                    PF add PF_DST, PF_DST, #1
++                                    PF add PF_SRC, PF_SRC, SRC_STRIDE, lsl #src_bpp_shift
++                                    PF ldrsb DUMMY, [PF_SRC]
++                                    PF add PF_DST, PF_DST, DST_STRIDE, lsl #dst_bpp_shift
++                                    PF ldrsb DUMMY, [PF_DST]
+ 10:
+     uqadd       v29.8b, v1.8b, v5.8b
+     uqadd       v30.8b, v2.8b, v6.8b
+@@ -631,12 +626,10 @@ generate_composite_function \
+ 10:
+     uqadd       v28.8b, v0.8b, v4.8b
+                                     PF ble 10f
+-                                    PF lsl DUMMY, SRC_STRIDE, #src_bpp_shift
+-                                    PF ldrsb DUMMY, [PF_SRC, DUMMY]
+-                                    PF add PF_SRC, PF_SRC, #1
+-                                    PF lsl DUMMY, DST_STRIDE, #dst_bpp_shift
+-                                    PF ldrsb DUMMY, [PF_DST, DUMMY]
+-                                    PF add PF_DST, PF_DST, #1
++                                    PF add PF_SRC, PF_SRC, SRC_STRIDE, lsl #src_bpp_shift
++                                    PF ldrsb DUMMY, [PF_SRC]
++                                    PF add PF_DST, PF_DST, DST_STRIDE, lsl #dst_bpp_shift
++                                    PF ldrsb DUMMY, [PF_DST]
+ 10:
+     uqadd       v29.8b, v1.8b, v5.8b
+     uqadd       v30.8b, v2.8b, v6.8b
+@@ -719,15 +712,13 @@ generate_composite_function_single_scanline \
+ 10:
+     umull      v9.8h, v22.8b, v5.8b
+                                     PF ble 10f
+-                                    PF lsl DUMMY, SRC_STRIDE, #src_bpp_shift
+-                                    PF ldrsb DUMMY, [PF_SRC, DUMMY]
+-                                    PF add PF_SRC, PF_SRC, #1
++                                    PF add PF_SRC, PF_SRC, SRC_STRIDE, lsl #src_bpp_shift
++                                    PF ldrsb DUMMY, [PF_SRC]
+ 10:
+     umull      v10.8h, v22.8b, v6.8b
+                                     PF ble 10f
+-                                    PF lsl DUMMY, DST_STRIDE, #dst_bpp_shift
+-                                    PF ldrsb DUMMY, [PF_DST, DUMMY]
+-                                    PF add PF_DST, PF_DST, #1
++                                    PF add PF_DST, PF_DST, DST_STRIDE, lsl #dst_bpp_shift
++                                    PF ldrsb DUMMY, [PF_DST]
+ 10:
+      umull     v11.8h, v22.8b, v7.8b
+ .endm
+@@ -793,15 +784,13 @@ generate_composite_function_single_scanline \
+ 10:
+     umull      v9.8h, v22.8b, v5.8b
+                                     PF ble 10f
+-                                    PF lsl DUMMY, SRC_STRIDE, #src_bpp_shift
+-                                    PF ldrsb DUMMY, [PF_SRC, DUMMY]
+-                                    PF add PF_SRC, PF_SRC, #1
++                                    PF add PF_SRC, PF_SRC, SRC_STRIDE, lsl #src_bpp_shift
++                                    PF ldrsb DUMMY, [PF_SRC]
+ 10:
+     umull      v10.8h, v22.8b, v6.8b
+                                     PF ble 10f
+-                                    PF lsl DUMMY, DST_STRIDE, #dst_bpp_shift
+-                                    PF ldrsb DUMMY, [PF_DST, DUMMY]
+-                                    PF add PF_DST, PF_DST, #1
++                                    PF add PF_DST, PF_DST, DST_STRIDE, lsl #dst_bpp_shift
++                                    PF ldrsb DUMMY, [PF_DST]
+ 10:
+     umull      v11.8h, v22.8b, v7.8b
+ .endm
+@@ -886,9 +875,8 @@ generate_composite_function_single_scanline \
+                                     PF subs PF_CTL, PF_CTL, #0x10
+     umull       v11.8h, v24.8b, v7.8b
+                                     PF ble 10f
+-                                    PF lsl DUMMY, DST_STRIDE, #dst_bpp_shift
+-                                    PF ldrsb DUMMY, [PF_DST, DUMMY]
+-                                    PF add PF_DST, PF_DST, #1
++                                    PF add PF_DST, PF_DST, DST_STRIDE, lsl #dst_bpp_shift
++                                    PF ldrsb DUMMY, [PF_DST]
+ 10:
+         st4         {v28.8b, v29.8b, v30.8b, v31.8b}, [DST_W], #32
+ .endm
+@@ -950,9 +938,8 @@ generate_composite_function \
+     umull       v9.8h, v22.8b, v5.8b
+     umull       v10.8h, v22.8b, v6.8b
+                                     PF blt 10f
+-                                    PF lsl DUMMY, DST_STRIDE, #dst_bpp_shift
+-                                    PF ldrsb DUMMY, [PF_DST, DUMMY]
+-                                    PF add PF_DST, PF_DST, #1
++                                    PF add PF_DST, PF_DST, DST_STRIDE, lsl #dst_bpp_shift
++                                    PF ldrsb DUMMY, [PF_DST]
+ 10:
+     umull       v11.8h, v22.8b, v7.8b
+ .endm
+@@ -1436,9 +1423,8 @@ generate_composite_function \
+ 10:
+     umull          v11.8h, v24.8b, v3.8b
+                                     PF ble 10f
+-                                    PF lsl DUMMY, MASK_STRIDE, #mask_bpp_shift
+-                                    PF ldrsb DUMMY, [PF_MASK, DUMMY]
+-                                    PF add PF_MASK, PF_MASK, #1
++                                    PF add PF_MASK, PF_MASK, MASK_STRIDE, lsl #mask_bpp_shift
++                                    PF ldrsb DUMMY, [PF_MASK]
+ 10:
+         st4        {v28.8b, v29.8b, v30.8b, v31.8b}, [DST_W], #32
+     ursra       v8.8h, v8.8h, #8
+@@ -1517,9 +1503,8 @@ generate_composite_function \
+ 10:
+     umull       v3.8h,  v27.8b, v16.8b
+                                     PF ble 10f
+-                                    PF lsl DUMMY, MASK_STRIDE, #mask_bpp_shift
+-                                    PF ldrsb DUMMY, [PF_MASK, DUMMY]
+-                                    PF add PF_MASK, PF_MASK, #1
++                                    PF add PF_MASK, PF_MASK, MASK_STRIDE, lsl #mask_bpp_shift
++                                    PF ldrsb DUMMY, [PF_MASK]
+ 10:
+         st1         {v28.8b, v29.8b, v30.8b, v31.8b}, [DST_W], #32
+     ursra       v0.8h, v0.8h,  #8
+@@ -1628,15 +1613,13 @@ generate_composite_function \
+ 10:
+     umull       v19.8h, v24.8b, v11.8b
+                                     PF ble 10f
+-                                    PF lsl DUMMY, DST_STRIDE, #dst_bpp_shift
+-                                    PF ldrsb DUMMY, [PF_DST, DUMMY]
+-                                    PF add PF_DST, PF_DST, #1
++                                    PF add PF_DST, PF_DST, DST_STRIDE, lsl #dst_bpp_shift
++                                    PF ldrsb DUMMY, [PF_DST]
+ 10:
+         uqadd       v28.8b, v0.8b, v28.8b
+                                     PF ble 10f
+-                                    PF lsl DUMMY, MASK_STRIDE, #mask_bpp_shift
+-                                    PF ldrsb DUMMY, [PF_MASK, DUMMY]
+-                                    PF add PF_MASK, PF_MASK, #1
++                                    PF add PF_MASK, PF_MASK, MASK_STRIDE, lsl #mask_bpp_shift
++                                    PF ldrsb DUMMY, [PF_MASK]
+ 10:
+         uqadd        v29.8b, v1.8b, v29.8b
+         uqadd        v30.8b, v2.8b, v30.8b
+@@ -2699,9 +2682,8 @@ generate_composite_function \
+                                     PF sub PF_X, PF_X, ORIG_W
+                                     PF subs PF_CTL, PF_CTL, #0x10
+                                     PF ble 10f
+-                                    PF lsl DUMMY, SRC_STRIDE, #src_bpp_shift
+-                                    PF ldrsb DUMMY, [PF_SRC, DUMMY]
+-                                    PF add PF_SRC, PF_SRC, #1
++                                    PF add PF_SRC, PF_SRC, SRC_STRIDE, lsl #src_bpp_shift
++                                    PF ldrsb DUMMY, [PF_SRC]
+ 10:
+ .endm
+ 
+@@ -2768,9 +2750,8 @@ generate_composite_function \
+                                     PF sub PF_X, PF_X, ORIG_W
+                                     PF subs PF_CTL, PF_CTL, #0x10
+                                     PF ble 10f
+-                                    PF lsl DUMMY, SRC_STRIDE, #src_bpp_shift
+-                                    PF ldrsb DUMMY, [PF_SRC, DUMMY]
+-                                    PF add PF_SRC, PF_SRC, #1
++                                    PF add PF_SRC, PF_SRC, SRC_STRIDE, lsl #src_bpp_shift
++                                    PF ldrsb DUMMY, [PF_SRC]
+ 10:
+ .endm
+ 
+diff --git a/pixman/pixman-arma64-neon-asm.h b/pixman/pixman-arma64-neon-asm.h
+index 5d93172..5bc317a 100644
+--- a/pixman/pixman-arma64-neon-asm.h
++++ b/pixman/pixman-arma64-neon-asm.h
+@@ -464,25 +464,21 @@
+     PF lsl DUMMY, PF_X, #mask_bpp_shift
+     PF prfm PREFETCH_MODE, [PF_MASK, DUMMY]
+ .endif
+-    PF ble 71f
++    PF ble 72f
+     PF sub PF_X, PF_X, ORIG_W
+     PF subs PF_CTL, PF_CTL, #0x10
+-71:
+     PF ble 72f
+ .if src_bpp_shift >= 0
+-    PF lsl DUMMY, SRC_STRIDE, #src_bpp_shift
+-    PF ldrsb DUMMY, [PF_SRC, DUMMY]
+-    PF add PF_SRC, PF_SRC, #1
++    PF add PF_SRC, PF_SRC, SRC_STRIDE, lsl #src_bpp_shift
++    PF ldrsb DUMMY, [PF_SRC]
+ .endif
+ .if dst_r_bpp != 0
+-    PF lsl DUMMY, DST_STRIDE, #dst_bpp_shift
+-    PF ldrsb DUMMY, [PF_DST, DUMMY]
+-    PF add PF_DST, PF_DST, #1
++    PF add PF_DST, PF_DST, DST_STRIDE, lsl #dst_bpp_shift
++    PF ldrsb DUMMY, [PF_DST]
+ .endif
+ .if mask_bpp_shift >= 0
+-    PF lsl DUMMY, MASK_STRIDE, #mask_bpp_shift
+-    PF ldrsb DUMMY, [PF_MASK, DUMMY]
+-    PF add PF_MASK, PF_MASK, #1
++    PF add PF_MASK, PF_MASK, MASK_STRIDE, lsl #mask_bpp_shift
++    PF ldrsb DUMMY, [PF_MASK]
+ .endif
+ 72:
+ .endif
+@@ -848,8 +844,7 @@ local skip1
+     PF mov      PF_DST, DST_R
+     PF mov      PF_MASK, MASK
+     /* PF_CTL = prefetch_distance | ((h - 1) << 4) */
+-    PF lsl      DUMMY, H, #4
+-    PF mov      PF_CTL, DUMMY
++    PF lsl      PF_CTL, H, #4
+     PF add      PF_CTL, PF_CTL, #(prefetch_distance - 0x10)
+ 
+     init
+-- 
+GitLab

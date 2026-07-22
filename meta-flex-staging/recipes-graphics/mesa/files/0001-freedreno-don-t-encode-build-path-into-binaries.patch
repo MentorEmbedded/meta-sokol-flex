@@ -19,7 +19,7 @@ Signed-off-by: Dmitry Baryshkov <dmitry.baryshkov@linaro.org>
  3 files changed, 8 insertions(+), 2 deletions(-)
 
 diff --git a/src/freedreno/afuc/meson.build b/src/freedreno/afuc/meson.build
-index 5dddc9a4dec..19324100013 100644
+index bb7cebf5a748..351cc31ef2de 100644
 --- a/src/freedreno/afuc/meson.build
 +++ b/src/freedreno/afuc/meson.build
 @@ -56,10 +56,12 @@ if with_tests
@@ -50,7 +50,7 @@ index 5dddc9a4dec..19324100013 100644
      )
      test('afuc-disasm',
 diff --git a/src/freedreno/decode/meson.build b/src/freedreno/decode/meson.build
-index 8c242de7d98..2115b0e0706 100644
+index 469eeb4eb597..dfa1c12d0d9f 100644
 --- a/src/freedreno/decode/meson.build
 +++ b/src/freedreno/decode/meson.build
 @@ -194,6 +194,7 @@ if dep_lua.found() and dep_libarchive.found()
@@ -61,7 +61,7 @@ index 8c242de7d98..2115b0e0706 100644
          capture: true,
        )
        test('cffdump-' + name,
-@@ -265,7 +266,8 @@ if with_tests
+@@ -247,7 +248,8 @@ if with_tests
        output: name + '.log',
        command: [crashdec, args, files('../tests/traces/' + name + '.devcore')],
        capture: true,
@@ -72,7 +72,7 @@ index 8c242de7d98..2115b0e0706 100644
  
      test('crashdec-' + name,
 diff --git a/src/freedreno/meson.build b/src/freedreno/meson.build
-index 29e1bc42400..afb7426f13f 100644
+index 98e49b8fcf0e..145e72597eb9 100644
 --- a/src/freedreno/meson.build
 +++ b/src/freedreno/meson.build
 @@ -6,7 +6,7 @@ inc_freedreno_rnn = include_directories('rnn')
@@ -84,28 +84,6 @@ index 29e1bc42400..afb7426f13f 100644
  
  dep_libarchive = dependency('libarchive', allow_fallback: true, required: false)
  dep_libxml2 = dependency('libxml-2.0', allow_fallback: true, required: false)
-diff --git a/src/freedreno/registers/gen_header.py b/src/freedreno/registers/gen_header.py
-index 54ce18dfaa6..3ce1d079e8b 100644
---- a/src/freedreno/registers/gen_header.py
-+++ b/src/freedreno/registers/gen_header.py
-@@ -889,13 +889,14 @@ The rules-ng-ng source files this header was generated from are:
- """)
- 	maxlen = 0
- 	for filepath in p.xml_files:
--		maxlen = max(maxlen, len(filepath))
-+        maxlen = max(maxlen, len(os.path.basename(filepath)))
- 	for filepath in p.xml_files:
--		pad = " " * (maxlen - len(filepath))
-+        filename = os.path.basename(filepath)
-+        pad = " " * (maxlen - len(filename))
- 		filesize = str(os.path.getsize(filepath))
- 		filesize = " " * (7 - len(filesize)) + filesize
- 		filetime = time.ctime(os.path.getmtime(filepath))
--		print("- " + filepath + pad + " (" + filesize + " bytes, from " + filetime + ")")
-+		print("- " + filename + pad + " (" + filesize + " bytes, from " + filetime + ")")
- 	if p.copyright_year:
- 		current_year = str(datetime.date.today().year)
- 		print()
 ---
 2.39.2
 
