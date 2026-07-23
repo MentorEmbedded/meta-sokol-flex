@@ -11,10 +11,15 @@ inherit kernel-arch
 
 do_install () {
     install -d "${D}/environment-setup.d"
+    # Strip build-system -ffile-prefix-map entries from KERNEL_CC;
+    # they reference TMPDIR and have no meaning in the installed SDK
+    KERNEL_CC_CLEAN="$(echo "${KERNEL_CC}" | sed 's/-ffile-prefix-map=[^ ]*//g')"
+    KERNEL_LD_CLEAN="$(echo "${KERNEL_LD}" | sed 's/-ffile-prefix-map=[^ ]*//g')"
+    KERNEL_AR_CLEAN="$(echo "${KERNEL_AR}" | sed 's/-ffile-prefix-map=[^ ]*//g')"
     cat <<END >"${D}/environment-setup.d/kernel.sh"
-KERNEL_CC="${KERNEL_CC}"
-KERNEL_LD="${KERNEL_LD}"
-KERNEL_AR="${KERNEL_AR}"
+KERNEL_CC="${KERNEL_CC_CLEAN}"
+KERNEL_LD="${KERNEL_LD_CLEAN}"
+KERNEL_AR="${KERNEL_AR_CLEAN}"
 END
 }
 
