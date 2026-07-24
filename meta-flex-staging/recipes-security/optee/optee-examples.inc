@@ -20,7 +20,6 @@ EXTRA_OEMAKE += "TA_DEV_KIT_DIR=${TA_DEV_KIT_DIR} \
                  OUTPUT_DIR=${B} \
                "
 
-S = "${WORKDIR}/git"
 B = "${WORKDIR}/build"
 
 
@@ -44,3 +43,6 @@ FILES:${PN} += "${nonarch_base_libdir}/optee_armtz/ \
 
 # Imports machine specific configs from staging to build
 PACKAGE_ARCH = "${MACHINE_ARCH}"
+EXTRA_OECMAKE:append = " -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+
+EXTRA_OECMAKE:append = " -DCMAKE_POLICY_VERSION_MINIMUM=3.5"

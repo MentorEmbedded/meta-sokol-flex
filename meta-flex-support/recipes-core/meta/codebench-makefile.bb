@@ -6,7 +6,7 @@ SUMMARY = "SDK Makefile Fragment for CodeBench"
 LICENSE = "MIT"
 INHIBIT_DEFAULT_DEPS = "1"
 
-S = "${WORKDIR}"
+S = "${UNPACKDIR}"
 
 SDK_PRE_BUILD_TARGET ?= ""
 SDK_POST_BUILD_TARGET ?= ""
