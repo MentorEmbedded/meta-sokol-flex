@@ -43,8 +43,8 @@ SYSTEMD_AUTO_ENABLE:${PN} = "disable"
 pkg_postinst_ontarget:${PN} () {
     if type systemctl >/dev/null 2>/dev/null; then
         systemctl daemon-reload
-        systemctl enable tee-supplicant@.service
-        systemctl --no-block restart tee-supplicant@.service
+        systemctl enable tee-supplicant@1.service
+        systemctl --no-block start tee-supplicant@1.service
     fi
 }
 EXTRA_OECMAKE:append = " -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
