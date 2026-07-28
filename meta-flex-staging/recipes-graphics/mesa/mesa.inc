@@ -22,6 +22,7 @@ SRC_URI = "git://gitlab.freedesktop.org/mesa/mesa.git;protocol=https;branch=25.2
            file://0001-meson-misdetects-64bit-atomics-on-mips-clang.patch \
            file://0001-freedreno-don-t-encode-build-path-into-binaries.patch \
            file://0001-vulkan_enc-meson.build-remove-TMPDIR-reference.patch \
+           file://0001-mesa-llvmpipe-Add-AArch64-CPU-feature-detection-to-J.patch  \
 "
 
 SRCREV = "461196a1c827769168304ff3f5b36360f16618ca"

@@ -1,0 +1,46 @@
+From c3c22e4b7fcccddf0cd6d83e85e134c97b8ccb79 Mon Sep 17 00:00:00 2001
+From: Ahsan Hussain <ahsan.hussain@siemens.com>
+Date: Tue, 28 Jul 2026 14:52:00 +0500
+Subject: [PATCH] mesa/llvmpipe: Add AArch64 CPU feature detection to JIT
+
+lp_build_fill_mattrs() only called sys::getHostCPUFeatures() for
+32-bit ARM (DETECT_ARCH_ARM), leaving AArch64 with no MAttrs at all.
+
+On AArch64, LLVM's getHostCPUName() returns the specific CPU model
+(e.g. cortex-a720ae), which implicitly enables SVE/SVE2 features in
+the TargetMachine.  If the kernel/VM does not expose SVE to userspace,
+getHostCPUFeatures() correctly returns sve=false, but without passing
+those overrides via MAttrs the JIT generates SVE instructions that
+crash with SIGILL.
+
+Fix by extending the guard to cover both ARM and AArch64, and use
+auto for the iterator since StringMapIterator was removed in LLVM 22.
+
+Upstream-Status: Pending
+
+Signed-off-by: Ahsan Hussain <ahsan.hussain@siemens.com>
+
+diff --git a/src/gallium/auxiliary/gallivm/lp_bld_misc.cpp b/src/gallium/auxiliary/gallivm/lp_bld_misc.cpp
+index 29062bbfc17..e46d72e0ca1 100644
+--- a/src/gallium/auxiliary/gallivm/lp_bld_misc.cpp
++++ b/src/gallium/auxiliary/gallivm/lp_bld_misc.cpp
+@@ -318,8 +318,8 @@ void
+ lp_build_fill_mattrs(std::vector<std::string> &MAttrs)
+ {
+ 
+-#if DETECT_ARCH_ARM
+-   /* llvm-3.3+ implements sys::getHostCPUFeatures for Arm,
++#if DETECT_ARCH_ARM || DETECT_ARCH_AARCH64
++   /* llvm-3.3+ implements sys::getHostCPUFeatures for Arm and AArch64,
+     * which allows us to enable/disable code generation based
+     * on the results of cpuid on these architectures.
+     */
+@@ -332,7 +332,7 @@ lp_build_fill_mattrs(std::vector<std::string> &MAttrs)
+       llvm::sys::getHostCPUFeatures(features);
+    #endif
+ 
+-   for (llvm::StringMapIterator<bool> f = features.begin();
++   for (auto f = features.begin();
+         f != features.end();
+         ++f) {
+       MAttrs.push_back(((*f).second ? "+" : "-") + (*f).first().str());
