@@ -51,6 +51,7 @@ PACKAGECONFIG[x11] = ",,libxcb libx11 libxrandr"
 EXTRA_OECMAKE += " \
     -DRESOURCE_INSTALL_DIR=${datadir}/vulkan-samples/assets \
     -DCMAKE_INSTALL_BINDIR=${bindir}/vulkan-samples \
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
 "
 
 FILES:${PN} += " \
