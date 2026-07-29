@@ -20,5 +20,5 @@ do_install:append:feature-flex-staging () {
         rm -f "${D}${sysconfdir}/tripwire/twinstall.sh"
     fi
     install -d "${D}${bindir}"
-    install -m 0755 "${WORKDIR}/twinstall.sh" "${D}${bindir}/"
+    install -m 0755 "${UNPACKDIR}/twinstall.sh" "${D}${bindir}/"
 }
