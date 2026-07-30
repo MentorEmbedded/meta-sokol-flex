@@ -26,7 +26,7 @@ SCRIPTS_VERSION ?= "0"
 SCRIPTS_ARTIFACT_NAME ?= "${DISTRO}-scripts-${DISTRO_VERSION}.${SCRIPTS_VERSION}"
 
 # Don't allow git to chdir up past our workspace to avoid redistributing the wrong repository
-export GIT_CEILING_DIRECTORIES = "${WORKDIR}:${FLEXDIR}:${TOPDIR}:${HOME}"
+export GIT_CEILING_DIRECTORIES = "${UNPACKDIR}:${FLEXDIR}:${TOPDIR}:${HOME}"
 
 # `layers` artifact configuration {{{1
 SUBLAYERS_INDIVIDUAL_ONLY ?= ""
@@ -283,7 +283,7 @@ python do_archive_layers () {
 
     l = d.createCopy()
     l.setVar('SRC_URI', 'git://')
-    l.setVar('WORKDIR', '/invalid')
+    l.setVar('UNPACKDIR', '/invalid')
 
     manifestdata = collections.defaultdict(list)
     for subdir, path, keep_paths in sorted(to_archive):
@@ -351,7 +351,7 @@ python do_archive_layers () {
         bb.process.run(['tar', '-cf', os.path.basename(fn) + '.tar'] + files, cwd=outdir)
 
     scripts = d.getVar('FLEX_SCRIPTS_FILES').split()
-    bb.process.run(['tar', '--transform=s,^,scripts/,', '--transform=s,^scripts/setup-flex,setup-flex,', '-cvf', d.expand('%s/${SCRIPTS_ARTIFACT_NAME}.tar' % outdir)] + scripts, cwd=d.getVar('WORKDIR'))
+    bb.process.run(['tar', '--transform=s,^,scripts/,', '--transform=s,^scripts/setup-flex,setup-flex,', '-cvf', d.expand('%s/${SCRIPTS_ARTIFACT_NAME}.tar' % outdir)] + scripts, cwd=d.getVar('UNPACKDIR'))
 }
 do_archive_layers[dirs] = "${S}/do_archive_layers ${S}"
 do_archive_layers[vardeps] += "${GET_REMOTES_HOOK}"
@@ -495,7 +495,7 @@ python do_archive_downloads () {
         bb.fatal('%s does not exist, but downloads requires it. Please run `bitbake-layers dump-downloads` with appropriate arguments.' % dl_by_layer_fn)
 
     downloads = list(checksummed_downloads(dl_by_layer_fn, dl_dir, archive_dl_dir))
-    downloads.extend(sorted(uninative_downloads(d.getVar('WORKDIR'), d.getVar('DL_DIR'))))
+    downloads.extend(sorted(uninative_downloads(d.getVar('UNPACKDIR'), d.getVar('DL_DIR'))))
     outdir = d.expand('${S}/do_archive_downloads')
     mandir = os.path.join(outdir, 'manifests')
     dldir = os.path.join(outdir, 'downloads')
@@ -603,7 +603,7 @@ archive_uninative_downloads () {
         ln -sf "${DL_DIR}/$fn" "${ARCHIVE_RELEASE_DL_DIR}/$fn"
     done
 }
-archive_uninative_downloads[dirs] = "${WORKDIR}"
+archive_uninative_downloads[dirs] = "${UNPACKDIR}"
 do_archive_downloads[prefuncs] += "archive_uninative_downloads"
 
 release_tar () {
@@ -678,10 +678,10 @@ do_archive_images () {
 
     # Lock down any autorevs
     if [ -e "${BUILDHISTORY_DIR}" ]; then
-        buildhistory-collect-srcrevs -p "${BUILDHISTORY_DIR}" >"${WORKDIR}/autorevs.conf"
-        if [ -s "${WORKDIR}/autorevs.conf" ]; then
-            set -- "$@" "--transform=s,${WORKDIR}/autorevs.conf,${CONF_INSTALL_PATH}/autorevs.conf,"
-            echo "${WORKDIR}/autorevs.conf" >>include
+        buildhistory-collect-srcrevs -p "${BUILDHISTORY_DIR}" >"${UNPACKDIR}/autorevs.conf"
+        if [ -s "${UNPACKDIR}/autorevs.conf" ]; then
+            set -- "$@" "--transform=s,${UNPACKDIR}/autorevs.conf,${CONF_INSTALL_PATH}/autorevs.conf,"
+            echo "${UNPACKDIR}/autorevs.conf" >>include
         fi
     fi
 
@@ -695,7 +695,7 @@ do_archive_images () {
         else
             kernel="${KERNEL_IMAGETYPE}"
         fi
-        sed -e "s/##ROOTFS##/${RELEASE_IMAGE}.$ext/; s/##KERNEL##/$kernel/" ${WORKDIR}/runqemu.in >runqemu
+        sed -e "s/##ROOTFS##/${RELEASE_IMAGE}.$ext/; s/##KERNEL##/$kernel/" ${UNPACKDIR}/runqemu.in >runqemu
         chmod +x runqemu
         set -- "$@" "--transform=s,runqemu,${BINARY_INSTALL_PATH}/runqemu,"
         echo runqemu >>include
@@ -704,21 +704,21 @@ do_archive_images () {
     set -- "$@" "--transform=s,$PWD/,${CONF_INSTALL_PATH}/,"
 
     if [ -e "${DEPLOY_DIR_IMAGE}/${RELEASE_IMAGE}-${MACHINE}${IMAGE_NAME_SUFFIX}.qemuboot.conf" ]; then
-        cp "${DEPLOY_DIR_IMAGE}/${RELEASE_IMAGE}-${MACHINE}${IMAGE_NAME_SUFFIX}.qemuboot.conf" ${WORKDIR}/qemuboot.conf
-        sed -i -e 's,-${MACHINE},,g' ${WORKDIR}/qemuboot.conf
-        set -- "$@" "--transform=s,${WORKDIR}/qemuboot.conf,${BINARY_INSTALL_PATH}/${RELEASE_IMAGE}.qemuboot.conf,"
-        echo "${WORKDIR}/qemuboot.conf" >>include
+        cp "${DEPLOY_DIR_IMAGE}/${RELEASE_IMAGE}-${MACHINE}${IMAGE_NAME_SUFFIX}.qemuboot.conf" ${UNPACKDIR}/qemuboot.conf
+        sed -i -e 's,-${MACHINE},,g' ${UNPACKDIR}/qemuboot.conf
+        set -- "$@" "--transform=s,${UNPACKDIR}/qemuboot.conf,${BINARY_INSTALL_PATH}/${RELEASE_IMAGE}.qemuboot.conf,"
+        echo "${UNPACKDIR}/qemuboot.conf" >>include
     fi
 
     if [ -n "${XLAYERS}" ]; then
         for layer in ${XLAYERS}; do
             echo "$layer"
         done \
-            | sort -u >"${WORKDIR}/xlayers.conf"
+            | sort -u >"${UNPACKDIR}/xlayers.conf"
     fi
-    if [ -e "${WORKDIR}/xlayers.conf" ]; then
-        set -- "$@" "--transform=s,${WORKDIR}/xlayers.conf,${BSPFILES_INSTALL_PATH}/xlayers.conf,"
-        echo "${WORKDIR}/xlayers.conf" >>include
+    if [ -e "${UNPACKDIR}/xlayers.conf" ]; then
+        set -- "$@" "--transform=s,${UNPACKDIR}/xlayers.conf,${BSPFILES_INSTALL_PATH}/xlayers.conf,"
+        echo "${UNPACKDIR}/xlayers.conf" >>include
     fi
 
     release_tar "$@" --files-from=include -chf ${MACHINE}-${ARCHIVE_RELEASE_VERSION}.tar
