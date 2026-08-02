@@ -11,7 +11,7 @@
 
 packages="python39 \
           python3-setuptools \
-          patch diffstat git bzip2 \
+          patch diffstat git bzip2 tar \
           gzip gawk chrpath wget cpio perl file which \
           rsync rpcgen \
           zstd lz4"
