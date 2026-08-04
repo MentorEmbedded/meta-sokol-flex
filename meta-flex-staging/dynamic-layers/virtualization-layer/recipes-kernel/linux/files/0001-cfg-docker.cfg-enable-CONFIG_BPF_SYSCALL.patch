@@ -31,12 +31,14 @@ diff --git a/cfg/docker.cfg b/cfg/docker.cfg
 index 4d8d7e04a..6bb25fd8a 100644
 --- a/cfg/docker.cfg
 +++ b/cfg/docker.cfg
-@@ -12,4 +12,5 @@ CONFIG_NETFILTER_XT_MATCH_IPVS=m
+@@ -13,6 +15,7 @@ CONFIG_NETFILTER_XT_MATCH_IPVS=m
  
  CONFIG_OVERLAY_FS=y
  
 +CONFIG_BPF_SYSCALL=y
  CONFIG_CGROUP_BPF=y
+ 
+ # standard kernel has this as module, but
 -- 
 2.34.1
 
