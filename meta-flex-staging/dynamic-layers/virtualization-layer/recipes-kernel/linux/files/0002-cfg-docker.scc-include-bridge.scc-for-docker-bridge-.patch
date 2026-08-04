@@ -18,9 +18,9 @@ diff --git a/cfg/docker.scc b/cfg/docker.scc
 index e317456cb..4f1eba249 100644
 --- a/cfg/docker.scc
 +++ b/cfg/docker.scc
-@@ -1,4 +1,6 @@
- define KFEATURE_DESCRIPTION "Enable Features needed by docker in addition to LXC features"
- define KFEATURE_COMPATIBILITY board
+@@ -4,4 +4,6 @@ define KFEATURE_COMPATIBILITY board
+ include cfg/lxc.scc
+ include features/bpf/bpf.scc
  
 +include cfg/net/bridge.scc
 +

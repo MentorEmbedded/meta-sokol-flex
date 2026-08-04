@@ -1,0 +1,28 @@
+From 7f5414c5aa77046e8d537185fdbec9e9b3b40346 Mon Sep 17 00:00:00 2001
+From: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+Date: Mon, 27 Apr 2026 14:35:16 +0500
+Subject: [PATCH] cfg/criu.cfg: enable TUN as part of kernel
+
+We need this set to y as it is required by VMM. If this config is set
+to m here, we can't change it to y from defconfig or cfg fragments.
+
+Upstream-Status: Pending
+
+Signed-off-by: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+---
+ cfg/criu.cfg | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/cfg/criu.cfg b/cfg/criu.cfg
+index dc9502a6..314addfa 100644
+--- a/cfg/criu.cfg
++++ b/cfg/criu.cfg
+@@ -5,4 +5,4 @@ CONFIG_INET_UDP_DIAG=y
+ CONFIG_PACKET_DIAG=y
+ CONFIG_NETLINK_DIAG=y
+ CONFIG_NETFILTER_XT_MARK=y
+-CONFIG_TUN=m
++CONFIG_TUN=y
+-- 
+2.34.1
+
