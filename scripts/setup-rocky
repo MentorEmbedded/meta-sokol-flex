@@ -57,4 +57,19 @@ if grep -Pq '^VERSION_ID=(?:|")8\.' /etc/os-release; then
     ln -sfn /usr/bin/python3.9 /usr/local/bin/python3
 fi
 
+# Rocky/RHEL ships tar 1.34 which crashes on xattr extraction with SELinux enabled.
+# Yocto requires tar >= 1.35. Build from source since no repo provides a newer version.
+TAR_VER=$(tar --version | awk 'NR==1{print $NF}')
+TAR_NEED="1.35"
+if ! printf '%s\n%s\n' "$TAR_NEED" "$TAR_VER" | sort -V -C 2>/dev/null; then
+    echo "tar $TAR_VER is too old for Yocto on SELinux-enabled hosts; building tar $TAR_NEED"
+    TAR_SRC="tar-$TAR_NEED"
+    TMP=$(mktemp -d)
+    curl -fsSL "https://ftp.gnu.org/gnu/tar/$TAR_SRC.tar.xz" -o "$TMP/$TAR_SRC.tar.xz"
+    tar -C "$TMP" -xJf "$TMP/$TAR_SRC.tar.xz"
+    (cd "$TMP/$TAR_SRC" && FORCE_UNSAFE_CONFIGURE=1 ./configure --prefix=/usr/local && make -j"$(nproc)" && make install)
+    rm -rf "$TMP"
+    echo "Installed $(/usr/local/bin/tar --version | awk 'NR==1{print}')"
+fi
+
 echo "Setup complete"
