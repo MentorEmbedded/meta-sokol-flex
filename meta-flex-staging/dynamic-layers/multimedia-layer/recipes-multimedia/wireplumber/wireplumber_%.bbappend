@@ -1,11 +1,14 @@
 FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
 
 SRC_URI:append = " \
+    file://50-no-suspend.conf \
     file://65-default-volume.conf \
 "
 
 do_install:append() {
     install -d ${D}${datadir}/wireplumber/wireplumber.conf.d
+    install -m 0644 ${UNPACKDIR}/50-no-suspend.conf \
+        ${D}${datadir}/wireplumber/wireplumber.conf.d/50-no-suspend.conf
     install -m 0644 ${UNPACKDIR}/65-default-volume.conf \
         ${D}${datadir}/wireplumber/wireplumber.conf.d/65-default-volume.conf
 }
