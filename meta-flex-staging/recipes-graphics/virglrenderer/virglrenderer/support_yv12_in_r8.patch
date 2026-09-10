@@ -1,0 +1,172 @@
+Upstream-Status: Inappropriate [not submitted yet]
+
+diff --git a/src/vrend/vrend_renderer.c b/src/vrend/vrend_renderer.c
+index f7e199a4..14caf458 100644
+--- a/src/vrend/vrend_renderer.c
++++ b/src/vrend/vrend_renderer.c
+@@ -2719,6 +2719,137 @@ int vrend_create_sampler_view(struct vrend_context *ctx,
+       view->u.tex.last_level = (val1 >> 8) & 0xff;
+    }
+ 
++   // If R8 is being used for video, check it for packed video layers.
++   // NOTE: We only see this being done for YV12, so assume that format for now.
++   if (res->is_r8_video && res->base.height0 % 8 == 0) {
++
++      /* Calculate video dimensions from packed texture
++       * YV12 layout
++       * - vert: Y (1/2) + V (1/8) + gap (1/8) + U (1/8) + gap (1/8)
++       * - hori: Y (full), V (1/2, duped), U (1/2, duped)
++       */
++      int video_width = res->base.width0;
++      int video_height = res->base.height0 / 2;
++      int video_block = res->base.height0 / 8;
++
++      // Store the size and position of the texture to create planes from
++      int tex_width, tex_height;
++      int src_y, src_width, src_height;
++      bool valid_layer = true;
++
++      // Determine plane parameters based on layer index
++      if (view->u.tex.first_layer == 0) {
++         // Y Plane - full resolution
++         tex_width = video_width;
++         tex_height = video_height;
++         src_y = 0;
++         src_width = video_width;
++         src_height = video_height;
++      } else if (view->u.tex.first_layer == 1) {
++         // V Plane - half resolution, stretched
++         tex_width = video_width / 2;
++         tex_height = video_height / 2;
++         src_y = video_height;
++         src_width = video_width / 2;
++         src_height = video_block;
++      } else if (view->u.tex.first_layer == 2) {
++         // U Plane - half resolution, stretched
++         tex_width = video_width / 2;
++         tex_height = video_height / 2;
++         src_y = video_height + video_block * 2;
++         src_width = video_width / 2;
++         src_height = video_block;
++      } else {
++         valid_layer = false;
++      }
++
++      if (valid_layer) {
++         // Save current GL state
++         GLint old_read_fbo = 0, old_draw_fbo = 0;
++         GLuint read_fbo = 0, draw_fbo = 0;
++         glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &old_read_fbo);
++         glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &old_draw_fbo);
++
++         // Create the new texture
++         GLuint plane_tex = 0;
++         glGenTextures(1, &plane_tex);
++         glBindTexture(GL_TEXTURE_2D, plane_tex);
++
++         // Allocate storage (use GL_RED for single channel)
++         glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, tex_width, tex_height, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
++         GLenum gl_err = glGetError();
++         if (gl_err != GL_NO_ERROR) {
++            virgl_error("YV12 plane extraction: glTexImage2D: 0x%x\n", gl_err);
++            valid_layer = false;
++         }
++
++         if (valid_layer) {
++            // Set texture parameters
++            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
++            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
++            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
++            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
++
++            glGenFramebuffers(1, &read_fbo);
++            glGenFramebuffers(1, &draw_fbo);
++
++            // Attach source texture to read FBO
++            glBindFramebuffer(GL_READ_FRAMEBUFFER, read_fbo);
++            glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
++                                   GL_TEXTURE_2D, res->gl_id, 0);
++            gl_err = glCheckFramebufferStatus(GL_READ_FRAMEBUFFER);
++            if (gl_err != GL_FRAMEBUFFER_COMPLETE) {
++               virgl_error("YV12 plane extraction: Read FBO: 0x%x\n", gl_err);
++               valid_layer = false;
++            }
++
++            if (valid_layer) {
++               // Attach destination texture to draw FBO
++               glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw_fbo);
++               glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
++                                      GL_TEXTURE_2D, plane_tex, 0);
++               gl_err = glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER);
++               if (gl_err != GL_FRAMEBUFFER_COMPLETE) {
++                  virgl_error("YV12 plane extraction: Draw FBO: 0x%x\n", gl_err);
++                  valid_layer = false;
++               }
++
++               if (valid_layer) {
++                  // Blit from source region to destination texture, stretching as needed
++                  glBlitFramebuffer(0, src_y, src_width, src_y + src_height,
++                                    0, 0, tex_width, tex_height,
++                                    GL_COLOR_BUFFER_BIT, GL_LINEAR);
++                  gl_err = glGetError();
++                  if (gl_err != GL_NO_ERROR) {
++                     virgl_error("YV12 plane extraction: glBlitFramebuffer: 0x%x\n", gl_err);
++                     valid_layer = false;
++                  }
++               }
++            }
++         }
++
++         // Restore the FBO state
++         if (read_fbo) glDeleteFramebuffers(1, &read_fbo);
++         if (draw_fbo) glDeleteFramebuffers(1, &draw_fbo);
++         glBindFramebuffer(GL_READ_FRAMEBUFFER, old_read_fbo);
++         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, old_draw_fbo);
++
++         if (valid_layer) {
++            // Replace the view's GL texture with this one
++            view->gl_id = plane_tex;
++            view->target = GL_TEXTURE_2D;
++
++            // Fix the layer range (each layer is solo)
++            view->u.tex.first_layer = 0;
++            view->u.tex.last_layer = 0;
++         } else {
++            glDeleteTextures(1, &plane_tex);
++         }
++      }
++   }
++
+    view->srgb_decode = GL_DECODE_EXT;
+    if (view->format != view->texture->base.format) {
+       if (util_format_is_srgb(view->texture->base.format) &&
+@@ -8849,6 +8980,14 @@ vrend_renderer_resource_create(const struct vrend_renderer_resource_create_args
+       return NULL;
+    }
+ 
++   /* Identify R8 format being used for video.
++    * The key is that LINEAR + R8 (and SHARED to a lesser degree) hint
++    * at video use, which is not normal for R8.
++    */
++   gr->is_r8_video = (gr->base.format == VIRGL_FORMAT_R8_UNORM &&
++                      gr->base.bind & VIRGL_BIND_LINEAR &&
++                      gr->base.bind & VIRGL_BIND_SHARED);
++
+    return &gr->base;
+ }
+ 
+diff --git a/src/vrend/vrend_renderer.h b/src/vrend/vrend_renderer.h
+index 29ee6974..606375f8 100644
+--- a/src/vrend/vrend_renderer.h
++++ b/src/vrend/vrend_renderer.h
+@@ -115,6 +115,8 @@ struct vrend_resource {
+    uint32_t blob_id;
+    struct list_head head;
+    bool is_imported;
++
++   bool is_r8_video;
+ };
+ 
+ #define VIRGL_TEXTURE_NEED_SWIZZLE        (1 << 0)
