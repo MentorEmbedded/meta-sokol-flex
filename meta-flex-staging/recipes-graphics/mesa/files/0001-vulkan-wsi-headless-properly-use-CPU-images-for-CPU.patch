@@ -1,0 +1,79 @@
+From 0114822f67b3fe42dcf2acd63bfaa1f5c96503fc Mon Sep 17 00:00:00 2001
+From: Icenowy Zheng <zhengxingda@iscas.ac.cn>
+Date: Thu, 12 Mar 2026 12:56:11 +0800
+Subject: [PATCH 1/1] vulkan/wsi/headless: properly use CPU images for CPU
+ devices
+
+Currently the headless WSI unconditionally uses DRM images as WSI
+images, which isn't proper behavior for working with lavapipe driver,
+and leads to either error or crash (depending on whether udmabuf is
+available).
+
+Properly setup CPU images instead of DRM images for software-rendering
+WSI devices.
+
+This fixes (at least) `dEQP-VK.wsi.headless.swapchain.render.*` on
+lavapipe.
+
+Fixes: 90caf9bdbd24 ("vulkan/wsi/headless: drop the wsi_create_null_image_mem override")
+Signed-off-by: Icenowy Zheng <zhengxingda@iscas.ac.cn>
+Reviewed-by: Yiwei Zhang <zzyiwei@chromium.org>
+(cherry picked from commit 38cf1b38291f936469fb7f54e34b9dfcae727990)
+
+Part-of: <https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/40752>
+---
+ src/vulkan/wsi/wsi_common_headless.c | 29 +++++++++++++++++++---------
+ 1 file changed, 20 insertions(+), 9 deletions(-)
+
+diff --git a/src/vulkan/wsi/wsi_common_headless.c b/src/vulkan/wsi/wsi_common_headless.c
+index c94439899d2..4bcaf13f326 100644
+--- a/src/vulkan/wsi/wsi_common_headless.c
++++ b/src/vulkan/wsi/wsi_common_headless.c
+@@ -405,7 +405,7 @@ wsi_headless_surface_create_swapchain(VkIcdSurfaceBase *icd_surface,
+       .sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2,
+       .pNext = &mod_list,
+    };
+-   if (wsi_device->supports_modifiers) {
++   if (!wsi_device->sw && wsi_device->supports_modifiers) {
+       wsi_device->GetPhysicalDeviceFormatProperties2(
+          wsi_device->pdevice, pCreateInfo->imageFormat, &props);
+       assert(mod_list.drmFormatModifierCount > 0);
+@@ -424,16 +424,27 @@ wsi_headless_surface_create_swapchain(VkIcdSurfaceBase *icd_surface,
+          mods[i] = mod_props[i].drmFormatModifier;
+    }
+ 
+-   struct wsi_drm_image_params drm_params = {
+-      .base.image_type = WSI_IMAGE_TYPE_DRM,
+-      .same_gpu = true,
+-      .num_modifier_lists = mod_list.drmFormatModifierCount > 0 ? 1 : 0,
+-      .num_modifiers = &mod_list.drmFormatModifierCount,
+-      .modifiers = (const uint64_t **)&mods,
+-   };
++   struct wsi_base_image_params *image_params = NULL;
++   struct wsi_cpu_image_params cpu_params;
++   struct wsi_drm_image_params drm_params;
++   if (wsi_device->sw) {
++      cpu_params = (struct wsi_cpu_image_params) {
++         .base.image_type = WSI_IMAGE_TYPE_CPU,
++      };
++      image_params = &cpu_params.base;
++   } else {
++      drm_params = (struct wsi_drm_image_params) {
++         .base.image_type = WSI_IMAGE_TYPE_DRM,
++         .same_gpu = true,
++         .num_modifier_lists = mod_list.drmFormatModifierCount > 0 ? 1 : 0,
++         .num_modifiers = &mod_list.drmFormatModifierCount,
++         .modifiers = (const uint64_t **)&mods,
++      };
++      image_params = &drm_params.base;
++   }
+ 
+    result = wsi_swapchain_init(wsi_device, &chain->base, device,
+-                               pCreateInfo, &drm_params.base, pAllocator);
++                               pCreateInfo, image_params, pAllocator);
+ 
+    STACK_ARRAY_FINISH(mods);
+    STACK_ARRAY_FINISH(mod_props);
+-- 
+2.34.1
+

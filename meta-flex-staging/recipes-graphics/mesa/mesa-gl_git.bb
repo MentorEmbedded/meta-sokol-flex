@@ -10,7 +10,7 @@ PROVIDES = "virtual/libgl virtual/mesa"
 
 TARGET_CFLAGS = "-I${STAGING_INCDIR}/drm"
 
-PACKAGECONFIG ??= "opengl gallium ${@bb.utils.filter('DISTRO_FEATURES', 'x11', d)} xmlconfig"
+PACKAGECONFIG = "expat opengl gallium ${@bb.utils.filter('DISTRO_FEATURES', 'x11', d)} xmlconfig zlib"
 
 # removed libclc from following as it depends on clang and we dont need it for now
 PACKAGECONFIG:append:x86 = " gallium-llvm intel amd nouveau svga"
