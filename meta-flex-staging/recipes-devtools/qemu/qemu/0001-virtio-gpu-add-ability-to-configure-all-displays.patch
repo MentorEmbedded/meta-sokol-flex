@@ -1,0 +1,90 @@
+From e6595db07fd5c8ed026d6b90810aaac5ec15cabd Mon Sep 17 00:00:00 2001
+From: "Ashraf, Haseeb (DI SW ICS HAV SLS)" <haseeb.ashraf@siemens.com>
+Date: Fri, 9 Jan 2026 02:43:04 -0700
+Subject: [PATCH 1/1] virtio-gpu: add ability to configure all displays
+
+Upstream-Status: Inappropriate [not submitted yet]
+
+Signed-off-by: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+---
+ hw/display/virtio-gpu-base.c   | 36 ++++++++++++++++++++++++++++++----
+ include/hw/virtio/virtio-gpu.h |  8 ++++++++
+ 2 files changed, 40 insertions(+), 4 deletions(-)
+
+diff --git a/hw/display/virtio-gpu-base.c b/hw/display/virtio-gpu-base.c
+index 270fbaae10..5fcc95f895 100644
+--- a/hw/display/virtio-gpu-base.c
++++ b/hw/display/virtio-gpu-base.c
+@@ -194,11 +194,39 @@ virtio_gpu_base_device_realize(DeviceState *qdev,
+         error_setg(errp, "invalid max_outputs > %d", VIRTIO_GPU_MAX_SCANOUTS);
+         return false;
+     }
++    /*
++     * For multiple outputs, the per-display resolution arrays must contain
++     * exactly one width and height entry for every configured output.
++     */
++    if (g->conf.max_outputs > 1 &&
++        (g->conf.num_x != g->conf.num_y ||
++         g->conf.num_x != g->conf.max_outputs)) {
++        error_setg(errp,
++                   "invalid display resolution array input.\n"
++                   "num_x:%d, num_y:%d and max_outputs:%d must be equal!",
++                   g->conf.num_x, g->conf.num_y, g->conf.max_outputs);
++        return false;
++    }
+ 
+-    g->enabled_output_bitmask = 1;
+-
+-    g->req_state[0].width = g->conf.xres;
+-    g->req_state[0].height = g->conf.yres;
++    /*
++     * Configure the enabled outputs and their initial resolutions.
++     *
++     * For a single output, retain the existing xres/yres behavior.
++     * For multiple outputs, use the per-output x[] and y[] arrays.
++     */
++    if (g->conf.max_outputs > 1) {
++        for (i = 0; i < g->conf.max_outputs; i++) {
++            if (g->conf.x[i] > 0 && g->conf.y[i] > 0) {
++                g->enabled_output_bitmask |= (1 << i);
++                g->req_state[i].width = g->conf.x[i];
++                g->req_state[i].height = g->conf.y[i];
++            }
++        }
++    } else {
++        g->enabled_output_bitmask = 1;
++        g->req_state[0].width = g->conf.xres;
++        g->req_state[0].height = g->conf.yres;
++    }
+ 
+     for (output_idx = 0, node = g->conf.outputs;
+          node; output_idx++, node = node->next) {
+diff --git a/include/hw/virtio/virtio-gpu.h b/include/hw/virtio/virtio-gpu.h
+index 220231ec9d..eedb2a29e1 100644
+--- a/include/hw/virtio/virtio-gpu.h
++++ b/include/hw/virtio/virtio-gpu.h
+@@ -129,6 +129,10 @@ enum virtio_gpu_base_conf_flags {
+ struct virtio_gpu_base_conf {
+     uint32_t max_outputs;
+     uint32_t flags;
++    uint32_t num_x;
++    uint32_t *x;
++    uint32_t num_y;
++    uint32_t *y;
+     uint32_t xres;
+     uint32_t yres;
+     uint64_t hostmem;
+@@ -175,6 +179,10 @@ struct VirtIOGPUBaseClass {
+     DEFINE_PROP_VIRTIO_GPU_OUTPUT_LIST("outputs", _state, _conf.outputs), \
+     DEFINE_PROP_BIT("edid", _state, _conf.flags, \
+                     VIRTIO_GPU_FLAG_EDID_ENABLED, true), \
++    DEFINE_PROP_UINT32("num_x", _state, _conf.num_x, 0),    \
++    DEFINE_PROP_UINT32("num_y", _state, _conf.num_y, 0),    \
++    DEFINE_PROP_ARRAY("x", _state, _conf.num_x, _conf.x, qdev_prop_uint32, uint32_t), \
++    DEFINE_PROP_ARRAY("y", _state, _conf.num_y, _conf.y, qdev_prop_uint32, uint32_t), \
+     DEFINE_PROP_UINT32("xres", _state, _conf.xres, 1280), \
+     DEFINE_PROP_UINT32("yres", _state, _conf.yres, 800)
+ 
+-- 
+2.34.1
+
