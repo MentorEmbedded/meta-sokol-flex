@@ -85,6 +85,7 @@ SRC_URI = "git://github.com/qemu/qemu.git;protocol=https;branch=master;submodule
            file://0011-qemu-Ensure-pip-and-the-python-venv-aren-t-used-for-.patch \
            file://0001-ui-sdl2.c-force-disable-SDL_HINT_VIDEO_X11_FORCE_EGL.patch \
            file://AT1-7236-flickering-rutabaga.patch \
+           file://0001-virtio-gpu-add-ability-to-configure-all-displays.patch \
            file://0001-Update-for-audio-support.patch \
            file://qemu-guest-agent.init \
            file://qemu-guest-agent.udev \
