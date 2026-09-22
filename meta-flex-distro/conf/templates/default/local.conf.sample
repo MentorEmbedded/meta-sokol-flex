@@ -30,6 +30,11 @@ DL_DIR ?= "${FLEXDIR}/downloads"
 # Prebuilt binary cache
 SSTATE_DIR ?= "${FLEXDIR}/cached-binaries"
 
+# Evaluate tasks based on standard basic hashing
+BB_HASHSERVE = ""
+BB_SIGNATURE_HANDLER = "OEBasicHash"
+
+
 # Download files from a mirror
 #INHERIT += "own-mirrors"
 #SOURCE_MIRROR_URL = "file:///cache/downloads"
