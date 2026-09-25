@@ -15,6 +15,9 @@ RELEASE_ARTIFACTS ?= "layers bitbake images downloads"
 RELEASE_ARTIFACTS[doc] = "List of artifacts to include (available: layers, bitbake, images, downloads"
 RELEASE_IMAGE ?= "core-image-base"
 RELEASE_IMAGE[doc] = "The image to build and archive in this release"
+RELEASE_USE_TAGS ?= "false"
+RELEASE_USE_TAGS[doc] = "Use git tags rather than just # of commits for layer archive versioning"
+RELEASE_USE_TAGS[type] = "boolean"
 BINARY_ARTIFACTS_COMPRESSION ?= ""
 BINARY_ARTIFACTS_COMPRESSION[doc] = "Compression type for images and downloads artifacts.\
  Available: '.bz2' and '.gz'. No compression if empty"
@@ -93,6 +96,7 @@ def uninative_urls(d):
 
 # Default values if archive-release-downloads is not inherited
 ARCHIVE_RELEASE_DL_DIR ?= "${DL_DIR}"
+ARCHIVE_RELEASE_DL_TOPDIR ?= "${ARCHIVE_RELEASE_DL_DIR}"
 
 FLEXDIR ?= "${COREBASE}/.."
 
@@ -139,6 +143,36 @@ release_tar () {
         --exclude=.git --exclude=\*.pyc --exclude=\*.pyo --exclude=.gitignore "$@"  \
         -v --show-stored-names
 }
+
+git_tar () {
+    path="$1"
+    shift
+    name="$1"
+    shift
+    rel="${path##*/}"
+
+    if [ -e "$path/.git" ]; then
+        if [ "${@oe.data.typed_value('RELEASE_USE_TAGS', d)}" = "True" ]; then
+            version="$(git --git-dir="$path/.git" describe --tags)"
+        else
+            version="$(git --git-dir="$path/.git" rev-list HEAD | wc -l)"
+        fi
+        git --git-dir=$path/.git archive --format=tar --prefix="${rel:-.}/" HEAD | bzip2 >${name}_${version}.tar.bz2
+    else
+        if repo_root "$path" | grep -q "^${FLEXDIR}/"; then
+            if [ "${@oe.data.typed_value('RELEASE_USE_TAGS', d)}" = "True" ]; then
+                version=$(cd "$path" && git describe --tags)
+            else
+                version=$(cd "$path" && git rev-list HEAD . | wc -l)
+            fi
+            release_tar $path "$@" -cjf ${name}_${version}.tar.bz2
+        else
+            release_tar $path "$@" -cjf $name.tar.bz2
+        fi
+    fi
+}
+# Workaround shell function dependency issue
+git_tar[vardeps] += "repo_root"
 
 repo_root () {
     git_root=$(cd $1 && git rev-parse --show-toplevel 2>/dev/null)
@@ -188,6 +222,116 @@ bb_layers () {
 # Workaround shell function dependency issue
 bb_layers[vardeps] += "repo_root"
 bb_layers[vardepsexclude] += "layer%/ topdir##*/ layer#${topdir}/"
+
+do_archive_layers () {
+    >${MACHINE}-layers.txt
+    bb_layers | while read path relpath name; do
+        echo "$relpath" >>${MACHINE}-layers.txt
+    done
+
+    bb_layers | sort -k1,1 -u | while read path relpath name; do
+        if [ -z "$name" ]; then
+            name="${path##*/}"
+        fi
+
+        if echo "${SUBLAYERS_INDIVIDUAL_ONLY_TOPLEVEL}" | grep -qw "$path"; then
+            # Grab the entire toplevel dir for non-individually-archived
+            # sub-layers
+            git_tar "$path" "$name" "--transform=s,^$path,$name,"
+        else
+            git_tar "$path" "$name" "--transform=s,^$path,$relpath,"
+        fi
+    done
+}
+
+do_archive_downloads () {
+    for layer in ${BBLAYERS}; do
+        ${@bb.utils.which('${BBPATH}', '../scripts/bb-print-layer-data')} "$layer/conf/layer.conf"
+    done 2>/dev/null | sed -n 's/^\([^:]*\):[^|]*|\([^|]*\)|.*/\1|\2/p' >layermap.txt
+
+    mkdir -p downloads
+    if [ -e ${WORKDIR}/uninative ]; then
+        cp -a ${WORKDIR}/uninative downloads/
+        # We symlink to the root of downloads so the downloads dir can be
+        # used either as a mirror or directly as the DL_DIR
+        (cd downloads && find uninative -type f -print0 | xargs -0 -I"{}" sh -c 'touch "{}.done"; ln -sf "{}" .; ln -sf "{}.done" .')
+    fi
+
+    if [ "${ARCHIVE_RELEASE_DL_TOPDIR}" != "${ARCHIVE_RELEASE_DL_DIR}" ]; then
+        for dir in ${ARCHIVE_RELEASE_DL_TOPDIR}/*/; do
+            dir="${dir%/}"
+            name=$(basename $dir)
+            mkdir -p downloads/$name
+            find -L $dir -type f -maxdepth 2 | while read source; do
+                source_name="$(basename "$source")"
+                if [ -e "${DL_DIR}/$source_name" ]; then
+                    ln -sf "${DL_DIR}/$source_name" "downloads/$name/$source_name"
+                    touch "downloads/$name/$source_name.done"
+                fi
+            done
+            cd downloads/$name
+            for file in ${RELEASE_EXCLUDED_SOURCES}; do
+                rm -f "$file"
+            done
+            cd - >/dev/null
+            layerpath="$(sed -n "s/^$name|//p" layermap.txt)" || exit 1
+            if [ -n "$layerpath" ]; then
+                layerroot="$(repo_root "$layerpath")"
+                layerbase="${layerroot##*/}"
+                if echo "${LAYERS_OWN_DOWNLOADS}" | grep -Eq "\<$name\>"; then
+                    layer_relpath="${layerpath#${layerroot}/}"
+                    if [ "$layer_relpath" = "$layerroot" ]; then
+                        layer_relpath=$layerbase
+                    else
+                        layer_relpath=$layerbase/$layer_relpath
+                    fi
+                    release_tar "--transform=s,^downloads/$name,$layer_relpath/downloads," -chf \
+                            $name-downloads.tar downloads/$name
+                else
+                    release_tar "--transform=s,^downloads/$name,downloads," -rhf \
+                            $layerbase-downloads.tar downloads/$name
+                fi
+            fi
+        done
+        if [ -n "${UNINATIVE_TARBALL}" ]; then
+            release_tar -chf ${MACHINE}-downloads.tar downloads/uninative $(find downloads/uninative -type f | sed 's,^.*/,downloads/,')
+        fi
+    else
+        mkdir -p downloads
+        find -L ${ARCHIVE_RELEASE_DL_DIR} -type f -maxdepth 2 | while read source; do
+            source_name="$(basename "$source")"
+            if [ -e "${DL_DIR}/$source_name" ]; then
+                ln -sf "${DL_DIR}/$source_name" "downloads/$source_name"
+                touch "downloads/$source_name.done"
+            fi
+        done
+        cd downloads
+        for file in ${RELEASE_EXCLUDED_SOURCES}; do
+            rm -f "$file"
+        done
+        cd - >/dev/null
+        release_tar -chf ${MACHINE}-downloads.tar downloads/
+    fi
+    rm -rf downloads layermap.txt
+}
+# Workaround shell function dependency issue
+do_archive_downloads[vardeps] += "repo_root"
+addtask archive_downloads after do_fetch
+
+do_archive_bitbake () {
+    bitbake_dir="$(which bitbake)"
+    bitbake_via_layers=0
+    bb_layers | while read -r path _; do
+        case "$bitbake_dir" in
+            $path/*)
+                return
+                ;;
+        esac
+    done
+
+    bitbake_path="$(repo_root $(dirname $(which bitbake))/..)"
+    git_tar "$bitbake_path" bitbake "--transform=s,^$bitbake_path,${bitbake_path##*/},"
+}
 
 do_archive_images () {
     # transform IMAGE_LINK_NAME first before removing IMAGE_MACHINE_SUFFIX
