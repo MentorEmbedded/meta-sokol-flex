@@ -152,20 +152,10 @@ git_tar () {
     rel="${path##*/}"
 
     if [ -e "$path/.git" ]; then
-        if [ "${@oe.data.typed_value('RELEASE_USE_TAGS', d)}" = "True" ]; then
-            version="$(git --git-dir="$path/.git" describe --tags)"
-        else
-            version="$(git --git-dir="$path/.git" rev-list HEAD | wc -l)"
-        fi
-        git --git-dir=$path/.git archive --format=tar --prefix="${rel:-.}/" HEAD | bzip2 >${name}_${version}.tar.bz2
+        git --git-dir=$path/.git archive --format=tar --prefix="${rel:-.}/" HEAD | bzip2 >${name}.tar.bz2
     else
         if repo_root "$path" | grep -q "^${FLEXDIR}/"; then
-            if [ "${@oe.data.typed_value('RELEASE_USE_TAGS', d)}" = "True" ]; then
-                version=$(cd "$path" && git describe --tags)
-            else
-                version=$(cd "$path" && git rev-list HEAD . | wc -l)
-            fi
-            release_tar $path "$@" -cjf ${name}_${version}.tar.bz2
+            release_tar $path "$@" -cjf ${name}.tar.bz2
         else
             release_tar $path "$@" -cjf $name.tar.bz2
         fi
