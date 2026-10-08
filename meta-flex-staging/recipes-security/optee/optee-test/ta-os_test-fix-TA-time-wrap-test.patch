@@ -1,0 +1,44 @@
+From 8bd4562c6091727b021e0f2697540192d47ab47e Mon Sep 17 00:00:00 2001
+From: Jens Wiklander <jens.wiklander@linaro.org>
+Date: Tue, 28 Jan 2025 14:33:25 +0100
+Subject: [PATCH] ta: os_test: fix TA time wrap test
+
+In the test for wrapped TA time in test_time() we check that the time
+has wrapped and that not too much time has passed. The limit for this is
+currently 2 seconds of which 1 second is passed in TEE_Wait(). This is
+currently not enough time with the recent introduction of fTPM being
+probed in parallel with the test. So in order to avoid occasional false
+negatives increase the limit to 60 seconds.
+
+Upstream-Status: Backport [https://github.com/OP-TEE/optee_test/commit/8bd4562]
+
+Fixes: a2c1ce3a8c31 ("ta: os_test: fix TA time wrap test")
+Signed-off-by: Jens Wiklander <jens.wiklander@linaro.org>
+Acked-by: Jerome Forissier <jerome.forissier@linaro.org>
+Acked-by: Etienne Carriere <etienne.carriere@foss.st.com>
+---
+ ta/os_test/os_test.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/ta/os_test/os_test.c b/ta/os_test/os_test.c
+index 6cdd91f7a..6833e0c3e 100644
+--- a/ta/os_test/os_test.c
++++ b/ta/os_test/os_test.c
+@@ -600,7 +600,7 @@ static TEE_Result test_time(void)
+ 	 * TEE_GetTAPersistentTime() should be much less than 1 second, in fact
+ 	 * it's not even a millisecond.
+ 	 */
+-	if (t.seconds > 1 || t.millis >= 1000) {
++	if (t.seconds > 60 || t.millis >= 1000) {
+ 		EMSG("Unexpected stored TA time %"PRIu32".%03"PRIu32, t.seconds,
+ 		     t.millis);
+ 		return TEE_ERROR_BAD_STATE;
+@@ -623,7 +623,7 @@ static TEE_Result test_time(void)
+ 	}
+ 	MSG("TA time %"PRIu32".%03"PRIu32, t.seconds, t.millis);
+ 
+-	if (t.seconds > 1) {
++	if (t.seconds > 60) {
+ 		EMSG("Unexpected wrapped time %"PRIu32".%03"PRIu32, t.seconds,
+ 		     t.millis);
+ 		return TEE_ERROR_BAD_STATE;
