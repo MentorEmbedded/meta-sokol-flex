@@ -1,0 +1,78 @@
+From bfdbb47bcf72f0ad955570b162b99c79a3cb1ace Mon Sep 17 00:00:00 2001
+From: Junjie Cao <junjie.cao@intel.com>
+Date: Mon, 21 Sep 2026 13:46:30 +0800
+Subject: [PATCH 3/3] hw/usb/hcd-xhci: don't assert on NAK when retrying an
+ isoch transfer
+
+The endpoint type in the xHCI endpoint context comes from the guest and
+is not checked against the device. A guest can configure the interrupt
+IN endpoint of usb-kbd as Isoch IN. The idle HID endpoint NAKs, and as
+soon as the transfer goes through the retry path in xhci_kick_epctx()
+it hits
+
+  assert(xfer->packet.status != USB_RET_NAK);
+
+No device model NAKs on an isoch endpoint, so this only triggers with a
+mismatched endpoint type.
+
+The two retry branches differ only in what they do on NAK: the isoch one
+asserts, the other keeps the transfer pending. Merge them.
+
+Upstream-Status: Backport
+
+Fixes: 3d1396842d ("xhci: iso xfer support")
+Resolves: https://gitlab.com/qemu-project/qemu/-/issues/3886
+Reported-by: Feifan Qian <bea1e@proton.me>
+Cc: qemu-stable@nongnu.org
+Signed-off-by: Junjie Cao <junjie.cao@intel.com>
+Reviewed-by: Thomas Huth <thuth@redhat.com>
+Message-ID: <44227b05b22064a22f4c135e025ff0b1d838b9e3.1789968699.git.junjie.cao@intel.com>
+Signed-off-by: Thomas Huth <thuth@redhat.com>
+(cherry picked from commit 45684127cdee2d212125fd8d1de8a9c4804ee8bb)
+Signed-off-by: Michael Tokarev <mjt@tls.msk.ru>
+---
+ hw/usb/hcd-xhci.c | 27 ++++++++-------------------
+ 1 file changed, 8 insertions(+), 19 deletions(-)
+
+diff --git a/hw/usb/hcd-xhci.c b/hw/usb/hcd-xhci.c
+index 61690dbdce..624ce4ee75 100644
+--- a/hw/usb/hcd-xhci.c
++++ b/hw/usb/hcd-xhci.c
+@@ -1925,26 +1925,15 @@ static void xhci_kick_epctx(XHCIEPContext *epctx, unsigned int streamid)
+             xfer->timed_xfer = 0;
+             xfer->running_retry = 1;
+         }
+-        if (xfer->iso_xfer) {
+-            /* retry iso transfer */
+-            if (xhci_setup_packet(xfer) < 0) {
+-                return;
+-            }
+-            usb_handle_packet(xfer->packet.ep->dev, &xfer->packet);
+-            assert(xfer->packet.status != USB_RET_NAK);
+-            xhci_try_complete_packet(xfer);
+-        } else {
+-            /* retry nak'ed transfer */
+-            if (xhci_setup_packet(xfer) < 0) {
+-                return;
+-            }
+-            usb_handle_packet(xfer->packet.ep->dev, &xfer->packet);
+-            if (xfer->packet.status == USB_RET_NAK) {
+-                xhci_xfer_unmap(xfer);
+-                return;
+-            }
+-            xhci_try_complete_packet(xfer);
++        if (xhci_setup_packet(xfer) < 0) {
++            return;
++        }
++        usb_handle_packet(xfer->packet.ep->dev, &xfer->packet);
++        if (xfer->packet.status == USB_RET_NAK) {
++            xhci_xfer_unmap(xfer);
++            return;
+         }
++        xhci_try_complete_packet(xfer);
+         assert(!xfer->running_retry);
+         if (xfer->complete) {
+             /* update ring dequeue ptr */
+-- 
+2.34.1
+

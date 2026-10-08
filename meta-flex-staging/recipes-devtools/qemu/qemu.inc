@@ -87,6 +87,9 @@ SRC_URI = "git://github.com/qemu/qemu.git;protocol=https;branch=master;submodule
            file://AT1-7236-flickering-rutabaga.patch \
            file://0001-virtio-gpu-add-ability-to-configure-all-displays.patch \
            file://0001-Update-for-audio-support.patch \
+           file://0001-hw-usb-hcd-xhci-Set-reentrancy-guard-in-timer-functi.patch \
+           file://0002-hw-usb-hcd-xhci-fix-interval-alignment-after-MFINDEX.patch \
+           file://0003-hw-usb-hcd-xhci-don-t-assert-on-NAK-when-retrying-an.patch \
            file://qemu-guest-agent.init \
            file://qemu-guest-agent.udev \
 "
