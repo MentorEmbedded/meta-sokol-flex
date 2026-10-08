@@ -1,0 +1,66 @@
+From 273bb4dcdebe86ab600ea9f026c35d02ff346bb0 Mon Sep 17 00:00:00 2001
+From: Junjie Cao <junjie.cao@intel.com>
+Date: Mon, 21 Sep 2026 13:46:29 +0800
+Subject: [PATCH 2/3] hw/usb/hcd-xhci: fix interval alignment after MFINDEX
+ passes 2^32
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+epctx->interval is an unsigned int, so ~(epctx->interval - 1) is a
+32-bit mask that is zero-extended when and-ed with the 64-bit microframe
+index. Once mfindex no longer fits in 32 bits (2^32 * 125us, about 6.2
+days after the controller was started), asap loses its upper half and
+always compares below mfindex. Isoch TDs with SIA are then run at once
+instead of at the next interval boundary. xhci_calc_intr_kick() has the
+same expression.
+
+Use ROUND_UP(), which builds the mask in the type of mfindex. The
+interval is always a power of two.
+
+The reporter of #3973 also saw the symptom with UHCI. This change does
+not explain that.
+
+Upstream-Status: Backport
+
+Fixes: 3d1396842d ("xhci: iso xfer support")
+Fixes: 4d7a81c06f ("xhci: emulate intr endpoint intervals correctly")
+Link: https://gitlab.com/qemu-project/qemu/-/issues/3973
+Cc: qemu-stable@nongnu.org
+Signed-off-by: Junjie Cao <junjie.cao@intel.com>
+Reviewed-by: Philippe Mathieu-Daudé <philmd@oss.qualcomm.com>
+Message-ID: <52c9f935428f2cfc65e4dee7e37638fcb965c6b2.1789968699.git.junjie.cao@intel.com>
+Signed-off-by: Thomas Huth <thuth@redhat.com>
+(cherry picked from commit bfb82d57e7299cb59471f7060cbab0b1ed39504e)
+Signed-off-by: Michael Tokarev <mjt@tls.msk.ru>
+---
+ hw/usb/hcd-xhci.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/hw/usb/hcd-xhci.c b/hw/usb/hcd-xhci.c
+index 12f8ffece0..61690dbdce 100644
+--- a/hw/usb/hcd-xhci.c
++++ b/hw/usb/hcd-xhci.c
+@@ -1755,8 +1755,7 @@ static int xhci_fire_ctl_transfer(XHCIState *xhci, XHCITransfer *xfer)
+ static void xhci_calc_intr_kick(XHCIState *xhci, XHCITransfer *xfer,
+                                 XHCIEPContext *epctx, uint64_t mfindex)
+ {
+-    uint64_t asap = ((mfindex + epctx->interval - 1) &
+-                     ~(epctx->interval-1));
++    uint64_t asap = ROUND_UP(mfindex, epctx->interval);
+     uint64_t kick = epctx->mfindex_last + epctx->interval;
+ 
+     assert(epctx->interval != 0);
+@@ -1767,8 +1766,7 @@ static void xhci_calc_iso_kick(XHCIState *xhci, XHCITransfer *xfer,
+                                XHCIEPContext *epctx, uint64_t mfindex)
+ {
+     if (xfer->trbs[0].control & TRB_TR_SIA) {
+-        uint64_t asap = ((mfindex + epctx->interval - 1) &
+-                         ~(epctx->interval-1));
++        uint64_t asap = ROUND_UP(mfindex, epctx->interval);
+         if (asap >= epctx->mfindex_last &&
+             asap <= epctx->mfindex_last + epctx->interval * 4) {
+             xfer->mfindex_kick = epctx->mfindex_last + epctx->interval;
+-- 
+2.34.1
+
