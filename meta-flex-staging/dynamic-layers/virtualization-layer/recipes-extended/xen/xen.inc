@@ -233,3 +233,5 @@ do_install:prepend() {
     # so also need to unset CFLAGS here:
     unset CFLAGS
 }
+
+INSANE_SKIP:${PN}-dbg += "buildpaths"
