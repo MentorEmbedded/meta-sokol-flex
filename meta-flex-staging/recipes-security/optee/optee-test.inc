@@ -12,6 +12,7 @@ require optee.inc
 DEPENDS = "optee-client optee-os-tadevkit python3-cryptography-native openssl"
 
 SRC_URI = "git://github.com/OP-TEE/optee_test.git;branch=master;protocol=https \
+           file://ta-os_test-fix-TA-time-wrap-test.patch \
            file://run-ptest \
           "
 RDEPENDS:${PN} = "optee-os-tadevkit-ta"
