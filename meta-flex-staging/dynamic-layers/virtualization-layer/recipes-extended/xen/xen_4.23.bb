@@ -1,8 +1,7 @@
-# 4.22.0
-SRCREV ?= "d45d5687f1441495f4ee20d5e9940066c5fa5beb"
+# 4.23.0-unstable
+SRCREV ?= "63d0e8cc842975e786455f8a2e6502e85685f258"
 
-XEN_REL ?= "4.22.0"
-XEN_BRANCH ?= "stable-4.22"
+XEN_BRANCH ?= "master"
 
 SRC_URI = " \
     git://xenbits.xen.org/xen.git;branch=${XEN_BRANCH} \
@@ -11,7 +10,7 @@ SRC_URI = " \
 
 LIC_FILES_CHKSUM ?= "file://COPYING;md5=d1a1e216f80b6d8da95fec897d0dbec9"
 
-PV = "${XEN_REL}+stable"
+PV = "4.23.0+unstable"
 
 DEFAULT_PREFERENCE ??= "-1"
 
