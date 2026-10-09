@@ -86,6 +86,7 @@ SRC_URI = "git://github.com/qemu/qemu.git;protocol=https;branch=master;submodule
            file://0001-ui-sdl2.c-force-disable-SDL_HINT_VIDEO_X11_FORCE_EGL.patch \
            file://AT1-7236-flickering-rutabaga.patch \
            file://0001-virtio-gpu-add-ability-to-configure-all-displays.patch \
+           file://0001-virtio-gpu-Keep-legacy-and-context-fences-apart-in-a.patch \
            file://0001-Update-for-audio-support.patch \
            file://0001-hw-usb-hcd-xhci-Set-reentrancy-guard-in-timer-functi.patch \
            file://0002-hw-usb-hcd-xhci-fix-interval-alignment-after-MFINDEX.patch \
