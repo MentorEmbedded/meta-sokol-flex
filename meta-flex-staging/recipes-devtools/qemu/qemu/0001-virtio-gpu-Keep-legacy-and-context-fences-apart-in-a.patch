@@ -1,0 +1,69 @@
+From c39955bf9e69684814d2276f0629bfd134b6a1fa Mon Sep 17 00:00:00 2001
+From: Ahsan Hussain <ahsan.hussain@siemens.com>
+Date: Mon, 28 Sep 2026 14:10:35 +0500
+Subject: [PATCH] virtio-gpu: Keep legacy and context fences apart in async
+ fence BH
+
+The async fence BH retired every legacy (non-RING_IDX) fenced command
+with fence_id <= f->fence_id when handling a context fence callback.
+virtio-gpu fence ids come from one guest-wide sequence, so a Venus
+context fence could prematurely complete an earlier, still pending
+virgl (e.g. compositor) fence. The synchronous callbacks this replaced
+kept the two classes apart; do the same here.
+
+Also account inflight per retired command again, as the synchronous
+callbacks did, instead of once per callback.
+
+Upstream-Status: Pending
+
+Signed-off-by: Ahsan Hussain <ahsan.hussain@siemens.com>
+---
+ hw/display/virtio-gpu-virgl.c | 19 ++++++++++++++-----
+ 1 file changed, 14 insertions(+), 5 deletions(-)
+
+diff --git a/hw/display/virtio-gpu-virgl.c b/hw/display/virtio-gpu-virgl.c
+index c0fc6e5f0611..1d1b89fac96d 100644
+--- a/hw/display/virtio-gpu-virgl.c
++++ b/hw/display/virtio-gpu-virgl.c
+@@ -1138,25 +1138,34 @@ static void virtio_gpu_virgl_async_fence_bh(void *opaque)
+             if (cmd->cmd_hdr.fence_id > f->fence_id) {
+                 continue;
+             }
++            /*
++             * Fence ids share one guest-wide sequence, so a context fence
++             * must never retire a legacy (non-ring) fence, and vice versa.
++             */
+             if (cmd->cmd_hdr.flags & VIRTIO_GPU_FLAG_INFO_RING_IDX) {
++                if (f->ring_idx == UINT32_MAX) {
++                    continue;
++                }
+                 if (cmd->cmd_hdr.ring_idx != f->ring_idx) {
+                     continue;
+                 }
+                 if (cmd->cmd_hdr.ctx_id != f->ctx_id) {
+                     continue;
+                 }
++            } else if (f->ring_idx != UINT32_MAX) {
++                continue;
+             }
++            trace_virtio_gpu_fence_resp(cmd->cmd_hdr.fence_id);
+             virtio_gpu_ctrl_response_nodata(g, cmd, VIRTIO_GPU_RESP_OK_NODATA);
+             QTAILQ_REMOVE(&g->fenceq, cmd, next);
+             g_free(cmd);
++            g->inflight--;
++            if (virtio_gpu_stats_enabled(g->parent_obj.conf)) {
++                trace_virtio_gpu_dec_inflight_fences(g->inflight);
++            }
+         }
+ 
+-        trace_virtio_gpu_fence_resp(f->fence_id);
+         g_free(f);
+-        g->inflight--;
+-        if (virtio_gpu_stats_enabled(g->parent_obj.conf)) {
+-            trace_virtio_gpu_dec_inflight_fences(g->inflight);
+-        }
+     }
+ }
+ 
+-- 
+GitLab
