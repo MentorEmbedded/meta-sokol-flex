@@ -1,0 +1,177 @@
+From b2f093c0075e0316bd052bd88346aebad4f89923 Mon Sep 17 00:00:00 2001
+From: Ahsan Hussain <ahsan.hussain@siemens.com>
+Date: Tue, 6 Oct 2026 02:16:23 +0500
+Subject: [PATCH 6/8] vrend/egl: fix DRM node lookup of the EGL display device
+
+virgl_egl_open_drm_fd() is how the external-display path finds the GPU
+of the EGL display handed in by the embedder (e.g. QEMU), so that vrend's
+GBM device and the native/venus contexts land on the same GPU. It does
+not work on a common setup:
+- EGL_DRM_RENDER_NODE_FILE_EXT is not defined by epoxy <= 1.5.10, whose
+  egl.h replaces the Khronos eglext.h, so the render-node query is
+  compiled out and the code always falls back to the primary node.
+- The primary-node fallback open()s /dev/dri/cardN to look up its render
+  node. A libvirt-confined QEMU is only allowed to open render nodes
+  (cgroup_device_acl), so the open fails and -1 is returned, silently
+  selecting the default GPU instead of the display's GPU.
+
+Define the token when it is missing and only query it when the device
+advertises EGL_EXT_device_drm_render_node. Map the primary node to the
+render node of the same device through drmGetDevices2() without opening
+the primary node.
+
+Tested on a 2-GPU NVIDIA host with QEMU's EGL display on the second GPU:
+vrend's GBM device moves from renderD128 to renderD129.
+
+Upstream-Status: Pending
+
+Fixes: 7fcfce49 ("egl: Make vrend/gbm and native context by default use same GPU as EGL display")
+Signed-off-by: Ahsan Hussain <ahsan.hussain@siemens.com>
+---
+ src/vrend/vrend_winsys_egl.c | 104 ++++++++++++++++++++---------------
+ 1 file changed, 61 insertions(+), 43 deletions(-)
+
+diff --git a/src/vrend/vrend_winsys_egl.c b/src/vrend/vrend_winsys_egl.c
+index f34290b1..78d8074b 100644
+--- a/src/vrend/vrend_winsys_egl.c
++++ b/src/vrend/vrend_winsys_egl.c
+@@ -1066,13 +1066,49 @@ const char *virgl_egl_error_string(EGLint error)
+     }
+ }
+ 
++#ifndef EGL_DRM_RENDER_NODE_FILE_EXT
++/* EGL_EXT_device_drm_render_node; missing from older epoxy headers. */
++#define EGL_DRM_RENDER_NODE_FILE_EXT 0x3377
++#endif
++
++#ifdef ENABLE_LIBDRM
++/*
++ * Map a DRM primary node path to the render node of the same device without
++ * opening the primary node: sandboxed callers (e.g. a libvirt-confined QEMU)
++ * are commonly only allowed to open render nodes.
++ */
++static char *virgl_egl_primary_to_render_node(const char *primary_path)
++{
++   drmDevicePtr devices[64];
++   char *render_path = NULL;
++   int count = drmGetDevices2(0, devices, ARRAY_SIZE(devices));
++
++   for (int i = 0; i < count; i++) {
++      drmDevicePtr dev = devices[i];
++
++      if (!render_path &&
++          (dev->available_nodes & (1 << DRM_NODE_PRIMARY)) &&
++          (dev->available_nodes & (1 << DRM_NODE_RENDER)) &&
++          !strcmp(dev->nodes[DRM_NODE_PRIMARY], primary_path))
++         render_path = strdup(dev->nodes[DRM_NODE_RENDER]);
++   }
++
++   if (count > 0)
++      drmFreeDevices(devices, count);
++
++   return render_path;
++}
++#endif
++
+ int virgl_egl_open_drm_fd(struct virgl_egl *egl)
+ {
+ #if DETECT_OS_WINDOWS
+    return -1;
+ #else
+    const char *drm_path = NULL;
++   const char *device_exts;
+    EGLDeviceEXT device;
++   int fd;
+ 
+    if (!egl || !egl->funcs.eglQueryDisplayAttrib || !egl->funcs.eglQueryDeviceString)
+       return -1;
+@@ -1080,61 +1116,43 @@ int virgl_egl_open_drm_fd(struct virgl_egl *egl)
+    if (!egl->funcs.eglQueryDisplayAttrib(egl->egl_display, EGL_DEVICE_EXT, (EGLAttrib *)&device))
+       return -1;
+ 
+-#ifdef EGL_DRM_RENDER_NODE_FILE_EXT
+-   drm_path = egl->funcs.eglQueryDeviceString(device,
+-                                              EGL_DRM_RENDER_NODE_FILE_EXT);
+-#endif
++   device_exts = egl->funcs.eglQueryDeviceString(device, EGL_EXTENSIONS);
++
++   if (virgl_egl_has_extension_in_string(device_exts, "EGL_EXT_device_drm_render_node"))
++      drm_path = egl->funcs.eglQueryDeviceString(device, EGL_DRM_RENDER_NODE_FILE_EXT);
+ 
+-#ifdef EGL_DRM_DEVICE_FILE_EXT
+-   if (!drm_path) {
+-      drm_path = egl->funcs.eglQueryDeviceString(device,
+-                                                 EGL_DRM_DEVICE_FILE_EXT);
++   if (!drm_path &&
++       virgl_egl_has_extension_in_string(device_exts, "EGL_EXT_device_drm")) {
++      drm_path = egl->funcs.eglQueryDeviceString(device, EGL_DRM_DEVICE_FILE_EXT);
+ 
+ #ifdef ENABLE_LIBDRM
++      /*
++       * EGL_DRM_DEVICE_FILE_EXT is the DRM primary node. Rendering on it
++       * requires DRM master/auth, some kernel drivers reject rendering ioctls
++       * on it, and sandboxed processes often may not open it at all, so
++       * switch to the render node of the same GPU.
++       */
+       if (drm_path) {
+-         int fd = open(drm_path, O_RDWR | O_CLOEXEC);
+-
+-         /*
+-          * EGL_DRM_RENDER_NODE_FILE_EXT may not be defined by the epoxy version
+-          * we build against, or the EGL driver may not implement it, in which
+-          * case drm_path above falls back to EGL_DRM_DEVICE_FILE_EXT, i.e. the
+-          * DRM primary/master node. Rendering on a primary node requires DRM
+-          * master/auth and some kernel drivers (e.g. amdgpu) reject rendering
+-          * ioctls on it, so resolve and switch to the render node of the same
+-          * GPU whenever libdrm can tell us its path.
+-          */
+-         drmDevicePtr drm_device;
+-         if (drmGetDevice2(fd, 0, &drm_device) == 0) {
+-            int render_fd = -1;
+-
+-            if ((drm_device->available_nodes & (1 << DRM_NODE_RENDER)) &&
+-                drm_device->nodes[DRM_NODE_RENDER]) {
+-               render_fd = open(drm_device->nodes[DRM_NODE_RENDER],
+-                                O_RDWR | O_CLOEXEC);
+-
+-               virgl_debug("%s: using render node %s\n",
+-                           __func__, drm_device->nodes[DRM_NODE_RENDER]);
+-            }
+-
+-            drmFreeDevice(&drm_device);
+-
+-            if (render_fd >= 0) {
+-               close(fd);
+-               return render_fd;
+-            }
++         char *render_path = virgl_egl_primary_to_render_node(drm_path);
++
++         if (render_path) {
++            fd = open(render_path, O_RDWR | O_CLOEXEC);
++            virgl_debug("%s: using render node %s for %s\n",
++                        __func__, render_path, drm_path);
++            free(render_path);
++            if (fd >= 0)
++               return fd;
+          }
+-
+-         close(fd);
+       }
+ #endif
+    }
+-#endif
+ 
+    if (!drm_path)
+       return -1;
+ 
+-   virgl_debug("%s: %s\n", __func__, drm_path);
++   fd = open(drm_path, O_RDWR | O_CLOEXEC);
++   virgl_debug("%s: %s (fd %d)\n", __func__, drm_path, fd);
+ 
+-   return open(drm_path, O_RDWR | O_CLOEXEC);
++   return fd;
+ #endif
+ }
+-- 
+2.34.1
+

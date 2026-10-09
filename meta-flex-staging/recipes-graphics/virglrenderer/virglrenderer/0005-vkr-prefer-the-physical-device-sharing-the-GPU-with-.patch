@@ -1,0 +1,499 @@
+From d28d3067f1e82b7e1983555ce4d5e1bd1e5647cc Mon Sep 17 00:00:00 2001
+From: Ahsan Hussain <ahsan.hussain@siemens.com>
+Date: Tue, 6 Oct 2026 02:03:07 +0500
+Subject: [PATCH 5/8] vkr: prefer the physical device sharing the GPU with
+ vrend
+
+On multi-GPU hosts the render server's Vulkan instance enumerates the
+physical devices in driver order, while vrend, and with it the embedder's
+EGL display that imports guest WSI buffers, may be on another GPU, e.g.
+the one libvirt picked as QEMU's rendernode. Tiled dma-bufs allocated on
+one GPU can generally not be imported by EGL on another one, and linear
+ones cross PCIe for every frame.
+
+Send the major/minor of the DRM node vrend uses (get_drm_fd(), i.e. the
+EGL display's GPU) to the render server in RENDER_CLIENT_OP_INIT and let
+vkr enumerate the matching physical device, and the device group
+containing it, first. The physical device is matched through
+VK_EXT_physical_device_drm.
+
+The fields are appended to render_client_op_init_request. The server
+accepts the old request size, so an older client keeps the driver order.
+An older server rejects the larger request, so the client and the server
+have to be updated together.
+
+Upstream-Status: Pending
+
+Signed-off-by: Ahsan Hussain <ahsan.hussain@siemens.com>
+---
+ server/render_client.c          |  17 ++++-
+ server/render_client.h          |   2 +
+ server/render_context.c         |   3 +
+ server/render_context.h         |   2 +
+ server/render_protocol.h        |  12 ++++
+ src/proxy/proxy_client.c        |  14 +++-
+ src/proxy/proxy_client.h        |   5 +-
+ src/proxy/proxy_renderer.c      |   7 +-
+ src/proxy/proxy_renderer.h      |  11 +++-
+ src/venus/vkr_physical_device.c | 110 ++++++++++++++++++++++++++++++++
+ src/venus/vkr_renderer.h        |   7 ++
+ src/virglrenderer.c             |  30 ++++++++-
+ 12 files changed, 208 insertions(+), 12 deletions(-)
+
+diff --git a/server/render_client.c b/server/render_client.c
+index 87bab87e..da3a746b 100644
+--- a/server/render_client.c
++++ b/server/render_client.c
+@@ -75,12 +75,16 @@ render_client_clear_records(struct render_client *client)
+ static void
+ init_context_args(struct render_context_args *ctx_args,
+                   uint32_t init_flags,
++                  uint32_t drm_major,
++                  uint32_t drm_minor,
+                   const struct render_client_op_create_context_request *req,
+                   int ctx_fd)
+ {
+    *ctx_args = (struct render_context_args){
+       .valid = true,
+       .init_flags = init_flags,
++      .drm_major = drm_major,
++      .drm_minor = drm_minor,
+       .ctx_id = req->ctx_id,
+       .ctx_fd = ctx_fd,
+    };
+@@ -123,7 +127,8 @@ render_client_create_context(struct render_client *client,
+    int remote_fd = socket_fds[1];
+ 
+    struct render_context_args ctx_args;
+-   init_context_args(&ctx_args, client->init_flags, req, ctx_fd);
++   init_context_args(&ctx_args, client->init_flags, client->drm_major,
++                     client->drm_minor, req, ctx_fd);
+ 
+ #ifdef ENABLE_RENDER_SERVER_WORKER_THREAD
+    rec->worker = render_worker_create(srv->worker_jail, render_client_worker_thread,
+@@ -223,6 +228,8 @@ render_client_dispatch_init(struct render_client *client,
+                             const union render_client_op_request *req)
+ {
+    client->init_flags = req->init.flags;
++   client->drm_major = req->init.drm_major;
++   client->drm_minor = req->init.drm_minor;
+    vkr_library_preload_icd();
+    return true;
+ }
+@@ -257,7 +264,7 @@ static const struct render_client_dispatch_entry
+ bool
+ render_client_dispatch(struct render_client *client)
+ {
+-   union render_client_op_request req;
++   union render_client_op_request req = { 0 };
+    size_t req_size;
+    if (!render_socket_receive_request(&client->socket, &req, sizeof(req), &req_size))
+       return false;
+@@ -269,7 +276,11 @@ render_client_dispatch(struct render_client *client)
+ 
+    const struct render_client_dispatch_entry *entry =
+       &render_client_dispatch_table[req.header.op];
+-   if (entry->expect_size != req_size) {
++   /* older clients send INIT without the optional DRM device; the fields
++    * stay zeroed */
++   const bool legacy_init = req.header.op == RENDER_CLIENT_OP_INIT &&
++                            req_size == RENDER_CLIENT_OP_INIT_REQUEST_LEGACY_SIZE;
++   if (entry->expect_size != req_size && !legacy_init) {
+       render_log("invalid request size %zu for client op %d", req_size, req.header.op);
+       return false;
+    }
+diff --git a/server/render_client.h b/server/render_client.h
+index 214ba20e..9eca12c1 100644
+--- a/server/render_client.h
++++ b/server/render_client.h
+@@ -13,6 +13,8 @@ struct render_client {
+    struct render_socket socket;
+ 
+    uint32_t init_flags;
++   uint32_t drm_major;
++   uint32_t drm_minor;
+ 
+    struct list_head context_records;
+ };
+diff --git a/server/render_context.c b/server/render_context.c
+index b44b5b58..9182a26f 100644
+--- a/server/render_context.c
++++ b/server/render_context.c
+@@ -11,6 +11,7 @@
+ #include "virgl_util.h"
+ 
+ #include "render_state.h"
++#include "vkr_renderer.h"
+ 
+ void
+ render_context_update_timeline(struct render_context *ctx,
+@@ -357,6 +358,8 @@ render_context_main(const struct render_context_args *args)
+ 
+    assert(args->valid && args->ctx_id && args->ctx_fd >= 0);
+ 
++   vkr_renderer_set_preferred_drm_device(args->drm_major, args->drm_minor);
++
+    if (!render_state_init(args->init_flags)) {
+       close(args->ctx_fd);
+       return false;
+diff --git a/server/render_context.h b/server/render_context.h
+index 24435ab0..dfd1c124 100644
+--- a/server/render_context.h
++++ b/server/render_context.h
+@@ -33,6 +33,8 @@ struct render_context_args {
+    bool valid;
+ 
+    uint32_t init_flags;
++   uint32_t drm_major;
++   uint32_t drm_minor;
+ 
+    uint32_t ctx_id;
+    char ctx_name[32];
+diff --git a/server/render_protocol.h b/server/render_protocol.h
+index 7e38ac0c..0e079e2e 100644
+--- a/server/render_protocol.h
++++ b/server/render_protocol.h
+@@ -58,8 +58,20 @@ struct render_client_op_nop_request {
+ struct render_client_op_init_request {
+    struct render_client_op_header header;
+    uint32_t flags; /* VIRGL_RENDERER_USE_* and others */
++
++   /* Optional, may be omitted by older clients (see
++    * RENDER_CLIENT_OP_INIT_REQUEST_LEGACY_SIZE).  The major/minor numbers of
++    * the DRM node used by the client for EGL/GBM, or 0 if unknown.  The
++    * server prefers the matching Vulkan physical device so that dma-bufs can
++    * be shared with the client without crossing GPUs.
++    */
++   uint32_t drm_major;
++   uint32_t drm_minor;
+ };
+ 
++#define RENDER_CLIENT_OP_INIT_REQUEST_LEGACY_SIZE                                        \
++   (sizeof(struct render_client_op_header) + sizeof(uint32_t))
++
+ /* Remove all contexts.
+  *
+  * This roughly corresponds to virgl_renderer_reset.
+diff --git a/src/proxy/proxy_client.c b/src/proxy/proxy_client.c
+index 97e025fd..445934a2 100644
+--- a/src/proxy/proxy_client.c
++++ b/src/proxy/proxy_client.c
+@@ -81,17 +81,25 @@ proxy_client_destroy(struct proxy_client *client)
+ }
+ 
+ static bool
+-proxy_client_init(struct proxy_client *client, uint32_t flags)
++proxy_client_init(struct proxy_client *client,
++                  uint32_t flags,
++                  uint32_t drm_major,
++                  uint32_t drm_minor)
+ {
+    const struct render_client_op_init_request req = {
+       .header.op = RENDER_CLIENT_OP_INIT,
+       .flags = flags,
++      .drm_major = drm_major,
++      .drm_minor = drm_minor,
+    };
+    return proxy_socket_send_request(&client->socket, &req, sizeof(req));
+ }
+ 
+ struct proxy_client *
+-proxy_client_create(struct proxy_server *srv, uint32_t flags)
++proxy_client_create(struct proxy_server *srv,
++                    uint32_t flags,
++                    uint32_t drm_major,
++                    uint32_t drm_minor)
+ {
+    struct proxy_client *client = calloc(1, sizeof(*client));
+    if (!client)
+@@ -105,7 +113,7 @@ proxy_client_create(struct proxy_server *srv, uint32_t flags)
+ 
+    proxy_socket_init(&client->socket, client_fd);
+ 
+-   if (!proxy_client_init(client, flags)) {
++   if (!proxy_client_init(client, flags, drm_major, drm_minor)) {
+       proxy_socket_fini(&client->socket);
+       free(client);
+       return NULL;
+diff --git a/src/proxy/proxy_client.h b/src/proxy/proxy_client.h
+index d20af311..fe03454f 100644
+--- a/src/proxy/proxy_client.h
++++ b/src/proxy/proxy_client.h
+@@ -13,7 +13,10 @@ struct proxy_client {
+ };
+ 
+ struct proxy_client *
+-proxy_client_create(struct proxy_server *srv, uint32_t flags);
++proxy_client_create(struct proxy_server *srv,
++                    uint32_t flags,
++                    uint32_t drm_major,
++                    uint32_t drm_minor);
+ 
+ void
+ proxy_client_destroy(struct proxy_client *client);
+diff --git a/src/proxy/proxy_renderer.c b/src/proxy/proxy_renderer.c
+index 59c2d200..c7e01805 100644
+--- a/src/proxy/proxy_renderer.c
++++ b/src/proxy/proxy_renderer.c
+@@ -13,7 +13,10 @@
+ #include "vkr_renderer.h"
+ 
+ int
+-proxy_renderer_init(const struct proxy_renderer_cbs *cbs, uint32_t flags)
++proxy_renderer_init(const struct proxy_renderer_cbs *cbs,
++                    uint32_t flags,
++                    uint32_t drm_major,
++                    uint32_t drm_minor)
+ {
+    assert(flags & VIRGL_RENDERER_NO_VIRGL);
+ 
+@@ -25,7 +28,7 @@ proxy_renderer_init(const struct proxy_renderer_cbs *cbs, uint32_t flags)
+       goto fail;
+ 
+    proxy_renderer.client =
+-      proxy_client_create(proxy_renderer.server, proxy_renderer.flags);
++      proxy_client_create(proxy_renderer.server, proxy_renderer.flags, drm_major, drm_minor);
+    if (!proxy_renderer.client)
+       goto fail;
+ 
+diff --git a/src/proxy/proxy_renderer.h b/src/proxy/proxy_renderer.h
+index 827bbcfd..0450c89a 100644
+--- a/src/proxy/proxy_renderer.h
++++ b/src/proxy/proxy_renderer.h
+@@ -18,8 +18,12 @@ struct proxy_renderer_cbs {
+ 
+ #ifdef ENABLE_RENDER_SERVER
+ 
++/* drm_major/drm_minor identify the DRM node used by vrend (0 if unknown) */
+ int
+-proxy_renderer_init(const struct proxy_renderer_cbs *cbs, uint32_t flags);
++proxy_renderer_init(const struct proxy_renderer_cbs *cbs,
++                    uint32_t flags,
++                    uint32_t drm_major,
++                    uint32_t drm_minor);
+ 
+ void
+ proxy_renderer_fini(void);
+@@ -39,7 +43,10 @@ proxy_context_create(uint32_t ctx_id,
+ #else /* ENABLE_RENDER_SERVER */
+ 
+ static inline int
+-proxy_renderer_init(UNUSED const struct proxy_renderer_cbs *cbs, UNUSED uint32_t flags)
++proxy_renderer_init(UNUSED const struct proxy_renderer_cbs *cbs,
++                    UNUSED uint32_t flags,
++                    UNUSED uint32_t drm_major,
++                    UNUSED uint32_t drm_minor)
+ {
+    virgl_error("Render server support was not enabled in virglrenderer\n");
+    return -1;
+diff --git a/src/venus/vkr_physical_device.c b/src/venus/vkr_physical_device.c
+index e2c3baa5..ef14767a 100644
+--- a/src/venus/vkr_physical_device.c
++++ b/src/venus/vkr_physical_device.c
+@@ -11,6 +11,85 @@
+ #include "vkr_device.h"
+ #include "vkr_instance.h"
+ 
++static struct {
++   uint32_t major;
++   uint32_t minor;
++} vkr_preferred_drm_device;
++
++void
++vkr_renderer_set_preferred_drm_device(uint32_t major, uint32_t minor)
++{
++   vkr_preferred_drm_device.major = major;
++   vkr_preferred_drm_device.minor = minor;
++}
++
++static bool
++vkr_physical_device_handle_matches_drm(const struct vn_physical_device_proc_table *vk,
++                                       VkPhysicalDevice handle,
++                                       uint32_t major,
++                                       uint32_t minor)
++{
++   uint32_t count = 0;
++   if (vk->EnumerateDeviceExtensionProperties(handle, NULL, &count, NULL) != VK_SUCCESS ||
++       !count)
++      return false;
++
++   VkExtensionProperties *exts = calloc(count, sizeof(*exts));
++   if (!exts)
++      return false;
++
++   bool has_drm = false;
++   if (vk->EnumerateDeviceExtensionProperties(handle, NULL, &count, exts) >= VK_SUCCESS) {
++      for (uint32_t i = 0; i < count; i++) {
++         if (!strcmp(exts[i].extensionName, VK_EXT_PHYSICAL_DEVICE_DRM_EXTENSION_NAME)) {
++            has_drm = true;
++            break;
++         }
++      }
++   }
++   free(exts);
++   if (!has_drm)
++      return false;
++
++   VkPhysicalDeviceDrmPropertiesEXT drm_props = {
++      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRM_PROPERTIES_EXT,
++   };
++   VkPhysicalDeviceProperties2 props2 = {
++      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
++      .pNext = &drm_props,
++   };
++   vk->GetPhysicalDeviceProperties2(handle, &props2);
++
++   return (drm_props.hasRender && drm_props.renderMajor == major &&
++           drm_props.renderMinor == minor) ||
++          (drm_props.hasPrimary && drm_props.primaryMajor == major &&
++           drm_props.primaryMinor == minor);
++}
++
++/* Return the index of the physical device matching the preferred DRM node,
++ * or -1.
++ */
++static int
++vkr_instance_find_preferred_physical_device(struct vkr_instance *instance,
++                                            const VkPhysicalDevice *handles,
++                                            uint32_t count)
++{
++   const uint32_t major = vkr_preferred_drm_device.major;
++   const uint32_t minor = vkr_preferred_drm_device.minor;
++   if (!major)
++      return -1;
++
++   struct vn_physical_device_proc_table vk;
++   vn_util_init_physical_device_proc_table(instance->base.handle.instance,
++                                           instance->get_proc_addr, &vk);
++
++   for (uint32_t i = 0; i < count; i++) {
++      if (vkr_physical_device_handle_matches_drm(&vk, handles[i], major, minor))
++         return (int)i;
++   }
++   return -1;
++}
++
+ #ifdef HAVE_LINUX_UDMABUF_H
+ #include <fcntl.h>
+ 
+@@ -126,6 +205,18 @@ vkr_instance_enumerate_physical_devices(struct vkr_instance *instance)
+       return result;
+    }
+ 
++   /* Move the device sharing the GPU with the client's EGL/GBM to the front, so
++    * that guest WSI buffers can be imported by the host compositor path
++    * without crossing GPUs.
++    */
++   const int preferred =
++      vkr_instance_find_preferred_physical_device(instance, handles, count);
++   if (preferred > 0) {
++      const VkPhysicalDevice tmp = handles[preferred];
++      memmove(&handles[1], &handles[0], sizeof(*handles) * (uint32_t)preferred);
++      handles[0] = tmp;
++   }
++
+    instance->physical_device_count = count;
+    instance->physical_device_handles = handles;
+    instance->physical_devices = physical_devs;
+@@ -472,6 +563,25 @@ vkr_dispatch_vkEnumeratePhysicalDeviceGroups(
+    if (!orig_props)
+       return;
+ 
++   /* keep group order consistent with the physical device order */
++   if (instance->physical_device_count && vkr_preferred_drm_device.major) {
++      const VkPhysicalDevice first = instance->physical_device_handles[0];
++      for (uint32_t i = 1; i < *args->pPhysicalDeviceGroupCount; i++) {
++         const VkPhysicalDeviceGroupProperties *props =
++            &args->pPhysicalDeviceGroupProperties[i];
++         bool found = false;
++         for (uint32_t j = 0; j < props->physicalDeviceCount; j++)
++            found |= props->physicalDevices[j] == first;
++         if (found) {
++            const VkPhysicalDeviceGroupProperties tmp = *props;
++            memmove(&args->pPhysicalDeviceGroupProperties[1],
++                    &args->pPhysicalDeviceGroupProperties[0], sizeof(tmp) * i);
++            args->pPhysicalDeviceGroupProperties[0] = tmp;
++            break;
++         }
++      }
++   }
++
+    /* TODO avoid requiring venus driver to call vkEnumeratePhysicalDevices first */
+    /* replace VkPhysicalDevice handles by object ids */
+    for (uint32_t i = 0; i < *args->pPhysicalDeviceGroupCount; i++) {
+diff --git a/src/venus/vkr_renderer.h b/src/venus/vkr_renderer.h
+index be3ae046..fcde4319 100644
+--- a/src/venus/vkr_renderer.h
++++ b/src/venus/vkr_renderer.h
+@@ -35,6 +35,13 @@ vkr_renderer_init(uint32_t flags, const struct vkr_renderer_callbacks *cbs);
+ void
+ vkr_renderer_fini(void);
+ 
++/* Prefer the physical device backed by the given DRM node (render or
++ * primary).  The matching device, if any, is enumerated first.  Pass 0/0 to
++ * keep the driver order.
++ */
++void
++vkr_renderer_set_preferred_drm_device(uint32_t major, uint32_t minor);
++
+ bool
+ vkr_renderer_create_context(uint32_t ctx_id,
+                             uint32_t ctx_flags,
+diff --git a/src/virglrenderer.c b/src/virglrenderer.c
+index f6ddaf2c..ce8d8e30 100644
+--- a/src/virglrenderer.c
++++ b/src/virglrenderer.c
+@@ -33,6 +33,7 @@
+ #include <unistd.h>
+ #ifndef _WIN32
+ #include <sys/mman.h>
++#include <sys/sysmacros.h>
+ #else
+ #include "mman_win32.h"
+ #endif
+@@ -219,6 +220,29 @@ static int get_drm_fd(void)
+ #endif
+ }
+ 
++/* Identify the DRM node used by vrend so that the render server can pick the
++ * same GPU for venus.
++ */
++static void get_drm_device(uint32_t *out_major, uint32_t *out_minor)
++{
++#ifndef WIN32
++   int fd = get_drm_fd();
++   struct stat st;
++
++   if (fd < 0)
++      return;
++
++   if (!fstat(fd, &st) && S_ISCHR(st.st_mode)) {
++      *out_major = major(st.st_rdev);
++      *out_minor = minor(st.st_rdev);
++   }
++   close(fd);
++#else
++   (void)out_major;
++   (void)out_minor;
++#endif
++}
++
+ int virgl_renderer_context_create_with_flags(uint32_t ctx_id,
+                                              uint32_t ctx_flags,
+                                              uint32_t nlen,
+@@ -933,7 +957,11 @@ int virgl_renderer_init(void *cookie, int flags, struct virgl_renderer_callbacks
+    }
+ 
+    if (!state.proxy_initialized && (flags & VIRGL_RENDERER_RENDER_SERVER)) {
+-      ret = proxy_renderer_init(&proxy_cbs, flags | VIRGL_RENDERER_NO_VIRGL);
++      uint32_t drm_major = 0, drm_minor = 0;
++      get_drm_device(&drm_major, &drm_minor);
++
++      ret = proxy_renderer_init(&proxy_cbs, flags | VIRGL_RENDERER_NO_VIRGL, drm_major,
++                                drm_minor);
+       if (ret) {
+          virgl_error("failed to initialize venus renderer");
+          goto fail;
+-- 
+2.34.1
+
