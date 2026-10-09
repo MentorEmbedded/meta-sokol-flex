@@ -1,0 +1,622 @@
+From 442717444eb63e6912e30ca2424ef01812ef0445 Mon Sep 17 00:00:00 2001
+From: Ahsan Hussain <ahsan.hussain@siemens.com>
+Date: Fri, 2 Oct 2026 18:27:45 +0500
+Subject: [PATCH 3/8] vrend: sample external-only dma-bufs through a shadow
+ texture
+
+EGL_EXT_image_dma_buf_import_modifiers lets a driver report a
+format/modifier pair as external-only. Such images can only be bound to
+GL_TEXTURE_EXTERNAL_OES and sampled through samplerExternalOES; binding
+them to GL_TEXTURE_2D is not supported. vrend always binds imported
+dma-bufs to a regular texture target (gl_id), and the guest's shaders
+sample it as sampler2D, so these imports either fail or, worse, sample
+undefined data without any GL error.
+
+NVIDIA's proprietary driver (tested with 595.58.03 on aarch64) reports
+DRM_FORMAT_MOD_LINEAR as external-only for DRM_FORMAT_ARGB8888 and
+DRM_FORMAT_XRGB8888. LINEAR is what a guest compositor on virgl gets from
+a Venus client whenever the client's WSI uses its prime-blit path: e.g.
+when the host does not provide tiled Venus interop buffers, or with
+compositors such as KWin and wlroots that add LINEAR to their dma-buf
+feedback. On this driver glEGLImageTargetTexture2DOES(GL_TEXTURE_2D) of
+such an image is accepted without error, but GL_TEXTURE_2D sampling
+returns scrambled data, while the same image sampled as
+samplerExternalOES is correct. The only workaround so far is
+MESA_VK_WSI_DEBUG=sw in the guest, which costs a CPU copy per frame.
+
+Handle such resources with a shadow texture:
+ - In vrend_renderer_pipe_resource_set_type(), query
+   eglQueryDmaBufModifiersEXT() (new helper
+   virgl_egl_dmabuf_is_external_only()) for the imported
+   format/modifier. If the pair is external-only, import the EGL image
+   into a separate GL_TEXTURE_EXTERNAL_OES texture (egl_external_id) and
+   give gl_id ordinary storage of the same size and format. gl_id is then
+   no longer an EGL image, so VREND_STORAGE_EGL_IMAGE is cleared for it
+   and the copy/blit paths no longer treat the resource as one.
+ - Before the resource is read (sampler views bound for a draw, source of
+   resource_copy_region and blit, and transfers from host), copy the
+   external texture into gl_id with a small fullscreen draw in the
+   blitter context (vrend_blitter_refresh_external()), followed by
+   glFlush() and vrend_sync_make_current() so that the guest context
+   sees the result.
+ - The dma-buf is produced by another device or API, and the guest has to
+   synchronize with that producer (e.g. implicit fences or a
+   wait-for-buffer in the compositor) before it submits the commands that
+   read the resource. The shadow therefore only has to be refreshed once
+   per command submission: vrend_decode_ctx_submit_cmd() bumps a global
+   submission counter and each resource remembers the counter value of
+   its last refresh. Transfers happen outside of a command stream and
+   always refresh.
+ - Desktop GL has no extension that exposes samplerExternalOES to GLSL
+   1.30+, yet NVIDIA accepts "#version 330" with
+   GL_OES_EGL_image_external and texture2D(samplerExternalOES, ...) while
+   not advertising the extension in its GL extension string. So on
+   desktop GL, support is determined by compiling the copy program once.
+   On GLES, GL_OES_EGL_image_external_essl3 is required and the program
+   uses GLSL ES 3.00; the BGRA channel swap that vrend applies to BGRA
+   formats on GLES hosts is folded into the copy shader.
+ - If the copy program is not available, a warning is logged and the
+   resource is imported as before.
+
+Limitations:
+ - Only single-level, single-sample GL_TEXTURE_2D resources are handled;
+   other external-only imports fail with EINVAL instead of silently
+   sampling garbage.
+ - The shadow is a read-only mirror. Guest GL rendering into such a
+   resource lands in gl_id only and is overwritten by the next refresh.
+   For the case that motivated this (client buffers sampled by a
+   compositor) the guest never renders into the imported buffer.
+
+Drivers that do not report the imported pair as external-only are
+unaffected: no extra texture, no copies.
+
+Tested on an NVIDIA host (595.58.03) with a Venus + virgl guest running
+Weston, the client buffers imported as LINEAR, without MESA_VK_WSI_DEBUG:
+ - vkcube and vkmark --winsys=wayland render correctly instead of
+   scrambled.
+ - vkmark --winsys=wayland: 2431, vs. 1730 with MESA_VK_WSI_DEBUG=sw and
+   2360-2420 for the same LINEAR import without the shadow (which renders
+   garbage), i.e. the shadow copy costs no measurable throughput here.
+   Weston composites, and therefore refreshes, about 200 times per
+   second; each refresh of the 800x600 window buffer takes about 105 us
+   on the vrend thread.
+ - vkmark --winsys=headless: 8568, vs. about 2500 with
+   MESA_VK_WSI_DEBUG=sw.
+
+Upstream-Status: Pending
+
+Closes: https://gitlab.freedesktop.org/virgl/virglrenderer/-/issues/651
+Signed-off-by: Ahsan Hussain <ahsan.hussain@siemens.com>
+---
+ src/vrend/vrend_blitter.c    | 163 +++++++++++++++++++++++++++++++++++
+ src/vrend/vrend_blitter.h    |   2 +
+ src/vrend/vrend_decode.c     |   2 +
+ src/vrend/vrend_renderer.c   | 115 ++++++++++++++++++++++--
+ src/vrend/vrend_renderer.h   |  11 +++
+ src/vrend/vrend_winsys_egl.c |  45 ++++++++++
+ src/vrend/vrend_winsys_egl.h |   2 +
+ 7 files changed, 335 insertions(+), 5 deletions(-)
+
+diff --git a/src/vrend/vrend_blitter.c b/src/vrend/vrend_blitter.c
+index f8291153..1881d8c8 100644
+--- a/src/vrend/vrend_blitter.c
++++ b/src/vrend/vrend_blitter.c
+@@ -75,6 +75,10 @@ struct vrend_blitter_ctx {
+ 
+    GLuint vbo_id;
+    struct blit_coord vertices[4];
++
++   /* [0] identity, [1] BGRA swizzle (GLES only) */
++   GLuint external_prog_id[2];
++   bool external_prog_failed[2];
+ };
+ 
+ static struct vrend_blitter_ctx vrend_blit_ctx;
+@@ -906,6 +910,161 @@ void vrend_renderer_blit_gl(ASSERTED struct vrend_context *ctx,
+    glBindTexture(src_res->target, 0);
+ }
+ 
++/* Shaders used to copy an external-only EGL image (samplerExternalOES) into
++ * the regular shadow texture of the resource. */
++#define VS_EXTERNAL_GL                                   \
++   "#version 330\n"                                      \
++   VS_PASSTHROUGH_BODY
++
++#define VS_EXTERNAL_GLES                                 \
++   "#version 300 es\n"                                   \
++   "precision mediump float;\n"                          \
++   VS_PASSTHROUGH_BODY
++
++#define FS_EXTERNAL_GL                                   \
++   "#version 330\n"                                      \
++   "#extension GL_OES_EGL_image_external : require\n"    \
++   "uniform samplerExternalOES samp;\n"                  \
++   "in vec4 tc;\n"                                       \
++   "out vec4 FragColor;\n"                               \
++   "void main() {\n"                                     \
++   "   FragColor = texture2D(samp, tc.xy);\n"            \
++   "}\n"
++
++#define FS_EXTERNAL_GLES                                         \
++   "#version 300 es\n"                                           \
++   "#extension GL_OES_EGL_image_external_essl3 : require\n"      \
++   "precision mediump float;\n"                                  \
++   "uniform mediump samplerExternalOES samp;\n"                  \
++   "in vec4 tc;\n"                                               \
++   "out vec4 FragColor;\n"                                       \
++   "void main() {\n"                                             \
++   "   FragColor = texture(samp, tc.xy)%s;\n"                    \
++   "}\n"
++
++static GLuint blit_get_external_prog(struct vrend_blitter_ctx *blit_ctx, bool swizzle_bgra)
++{
++   unsigned idx = swizzle_bgra ? 1 : 0;
++
++   if (blit_ctx->external_prog_id[idx] || blit_ctx->external_prog_failed[idx])
++      return blit_ctx->external_prog_id[idx];
++
++   char fs_buf[512];
++   GLint vs_id, fs_id;
++   GLuint prog_id;
++
++   /* On GLES hosts BGRA resources are stored with swapped channels, so the
++    * swizzle has to be applied when writing the shadow texture. */
++   snprintf(fs_buf, sizeof(fs_buf), FS_EXTERNAL_GLES, swizzle_bgra ? ".bgra" : "");
++
++   vs_id = blit_shader_build_and_check(GL_VERTEX_SHADER,
++                                       blit_ctx->use_gles ? VS_EXTERNAL_GLES : VS_EXTERNAL_GL);
++   fs_id = blit_shader_build_and_check(GL_FRAGMENT_SHADER,
++                                       blit_ctx->use_gles ? fs_buf : FS_EXTERNAL_GL);
++   if (!vs_id || !fs_id) {
++      if (vs_id)
++         glDeleteShader(vs_id);
++      if (fs_id)
++         glDeleteShader(fs_id);
++      blit_ctx->external_prog_failed[idx] = true;
++      return 0;
++   }
++
++   prog_id = glCreateProgram();
++   glAttachShader(prog_id, vs_id);
++   glAttachShader(prog_id, fs_id);
++   if (!blit_shader_link_and_check(prog_id)) {
++      prog_id = 0;
++      blit_ctx->external_prog_failed[idx] = true;
++   }
++   glDeleteShader(vs_id);
++   glDeleteShader(fs_id);
++
++   blit_ctx->external_prog_id[idx] = prog_id;
++   return prog_id;
++}
++
++/* Check that the external image copy program can be used. On GLES this is
++ * what GL_OES_EGL_image_external_essl3 provides. Desktop GL has no extension
++ * that covers samplerExternalOES in GLSL 1.30+, and drivers (NVIDIA) accept
++ * it without advertising GL_OES_EGL_image_external, so probe by compiling
++ * the program instead. The caller must restore its own context afterwards. */
++bool vrend_blitter_external_supported(bool swizzle_bgra)
++{
++   struct vrend_blitter_ctx *blit_ctx = &vrend_blit_ctx;
++
++   vrend_renderer_init_blit_ctx(blit_ctx);
++   if (blit_ctx->use_gles &&
++       !epoxy_has_gl_extension("GL_OES_EGL_image_external_essl3"))
++      return false;
++
++   return blit_get_external_prog(blit_ctx, blit_ctx->use_gles && swizzle_bgra) != 0;
++}
++
++/* Refresh the shadow texture (gl_id) of a resource whose dma-buf can only be
++ * sampled as GL_TEXTURE_EXTERNAL_OES (egl_external_id). The copy is done in
++ * the blitter context; the caller must synchronize its own context with
++ * vrend_sync_make_current() afterwards. */
++void vrend_blitter_refresh_external(struct vrend_resource *res)
++{
++   struct vrend_blitter_ctx *blit_ctx = &vrend_blit_ctx;
++   GLuint prog_id;
++   int i;
++
++   vrend_renderer_init_blit_ctx(blit_ctx);
++
++   prog_id = blit_get_external_prog(blit_ctx,
++                                    blit_ctx->use_gles &&
++                                    vrend_format_is_bgra(res->base.format));
++   if (!prog_id) {
++      virgl_error("Blitter: unable to create external image copy program\n");
++      return;
++   }
++
++   glUseProgram(prog_id);
++
++   glBindFramebuffer(GL_FRAMEBUFFER, blit_ctx->fb_id);
++   glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
++                          GL_TEXTURE_2D, res->gl_id, 0);
++   GLuint buffers = GL_COLOR_ATTACHMENT0;
++   glDrawBuffers(1, &buffers);
++
++   glDisable(GL_SCISSOR_TEST);
++   glDisable(GL_BLEND);
++   glDisable(GL_DEPTH_TEST);
++   glDisable(GL_STENCIL_TEST);
++   glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
++   if (!blit_ctx->use_gles)
++      glDisable(GL_FRAMEBUFFER_SRGB);
++
++   glActiveTexture(GL_TEXTURE0);
++   glBindTexture(GL_TEXTURE_EXTERNAL_OES, res->egl_external_id);
++   glUniform1i(glGetUniformLocation(prog_id, "samp"), 0);
++
++   blit_ctx->dst_width = res->base.width0;
++   blit_ctx->dst_height = res->base.height0;
++   blitter_set_rectangle(blit_ctx, 0, 0, res->base.width0, res->base.height0);
++   for (i = 0; i < 4; i++) {
++      blit_ctx->vertices[i].tex.x = (i == 1 || i == 2) ? 1.0f : 0.0f;
++      blit_ctx->vertices[i].tex.y = (i >= 2) ? 1.0f : 0.0f;
++      blit_ctx->vertices[i].tex.z = 0.0f;
++      blit_ctx->vertices[i].tex.w = 1.0f;
++   }
++
++   vrend_set_vertex_param(prog_id);
++   glBufferData(GL_ARRAY_BUFFER, sizeof(blit_ctx->vertices), blit_ctx->vertices, GL_STATIC_DRAW);
++   glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
++
++   glUseProgram(0);
++   glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
++                          GL_TEXTURE_2D, 0, 0);
++   glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
++   /* restore the blitter defaults expected by vrend_renderer_blit_gl */
++   if (!blit_ctx->use_gles)
++      glEnable(GL_FRAMEBUFFER_SRGB);
++   glFlush();
++}
++
+ static void delete_program_cb(struct hash_entry *entry)
+ {
+    glDeleteProgram(pointer_to_uintptr(entry->data));
+@@ -916,6 +1075,10 @@ void vrend_blitter_fini(void)
+    vrend_blit_ctx.initialised = false;
+    if (vrend_blit_ctx.blit_programs)
+       _mesa_hash_table_u64_destroy(vrend_blit_ctx.blit_programs, delete_program_cb);
++   for (unsigned i = 0; i < ARRAY_SIZE(vrend_blit_ctx.external_prog_id); i++) {
++      if (vrend_blit_ctx.external_prog_id[i])
++         glDeleteProgram(vrend_blit_ctx.external_prog_id[i]);
++   }
+    vrend_clicbs->destroy_gl_context(vrend_blit_ctx.gl_context);
+    memset(&vrend_blit_ctx, 0, sizeof(vrend_blit_ctx));
+ }
+diff --git a/src/vrend/vrend_blitter.h b/src/vrend/vrend_blitter.h
+index 91e24352..9c457d11 100644
+--- a/src/vrend/vrend_blitter.h
++++ b/src/vrend/vrend_blitter.h
+@@ -186,6 +186,8 @@ void vrend_renderer_blit_gl(ASSERTED struct vrend_context *ctx,
+                             struct vrend_resource *src_res,
+                             struct vrend_resource *dst_res,
+                             const struct vrend_blit_info *info);
++bool vrend_blitter_external_supported(bool swizzle_bgra);
++void vrend_blitter_refresh_external(struct vrend_resource *res);
+ void vrend_blitter_fini(void);
+ 
+ #endif
+diff --git a/src/vrend/vrend_decode.c b/src/vrend/vrend_decode.c
+index 72fdab49..34dd138d 100644
+--- a/src/vrend/vrend_decode.c
++++ b/src/vrend/vrend_decode.c
+@@ -2073,6 +2073,8 @@ static int vrend_decode_ctx_submit_cmd(struct virgl_context *ctx,
+    if (bret == false)
+       return EINVAL;
+ 
++   vrend_renderer_begin_submit();
++
+    if (VREND_DEBUG_ENABLED &&
+        vrend_debug(gdctx->grctx, dbg_dump_cmd_streams) &&
+        size > TRANSFER_HEADER_SIZE) {
+diff --git a/src/vrend/vrend_renderer.c b/src/vrend/vrend_renderer.c
+index 8d99e234..69b4b585 100644
+--- a/src/vrend/vrend_renderer.c
++++ b/src/vrend/vrend_renderer.c
+@@ -404,6 +404,9 @@ struct global_renderer_state {
+ #endif
+    bool d3d_share_texture : 1;
+    bool gbm_layout_feat : 1;
++
++   /* incremented for each command buffer submission */
++   uint64_t submit_seq;
+ };
+ 
+ struct sysval_uniform_block {
+@@ -2307,6 +2310,34 @@ void vrend_sync_make_current(virgl_gl_context gl_cxt) {
+    glDeleteSync(sync);
+ }
+ 
++void vrend_renderer_begin_submit(void)
++{
++   vrend_state.submit_seq++;
++}
++
++/* Resources whose dmabuf import is external-only (e.g. LINEAR on NVIDIA) are
++ * sampled through an EXTERNAL_OES texture and copied into the regular gl_id
++ * shadow texture before they are read by the guest context.
++ *
++ * The dma-buf is written by another device or API, and the guest has to
++ * synchronize with that writer before it submits commands that read the
++ * resource, so the shadow only needs to be refreshed once per command
++ * submission. Reads outside of a submission (transfers) pass force. */
++static void vrend_resource_refresh_external(struct vrend_context *ctx,
++                                            struct vrend_resource *res,
++                                            bool force)
++{
++   if (!res || !res->egl_external_shadow || !res->egl_external_id)
++      return;
++
++   if (!force && res->egl_external_refresh_seq == vrend_state.submit_seq)
++      return;
++
++   vrend_blitter_refresh_external(res);
++   vrend_sync_make_current(ctx->sub->gl_context);
++   res->egl_external_refresh_seq = vrend_state.submit_seq;
++}
++
+ int vrend_create_surface(struct vrend_context *ctx,
+                          uint32_t handle, struct vrend_resource *res,
+                          enum virgl_formats format, uint32_t level,
+@@ -6065,6 +6096,14 @@ int vrend_draw_vbo(struct vrend_context *ctx,
+    if (ctx->ctx_switch_pending)
+       vrend_finish_context_switch(ctx);
+ 
++   for (int type = 0; type < PIPE_SHADER_TYPES; type++) {
++      for (int i = 0; i < sub_ctx->views[type].max_num_views; i++) {
++         struct vrend_sampler_view *view = sub_ctx->views[type].views[i];
++         if (view)
++            vrend_resource_refresh_external(ctx, view->texture, false);
++      }
++   }
++
+    vrend_update_frontface_state(sub_ctx);
+    if (ctx->sub->stencil_state_dirty)
+       vrend_update_stencil_state(sub_ctx);
+@@ -8842,6 +8881,37 @@ static int vrend_resource_alloc_texture(struct vrend_resource *gr,
+       gr->target = GL_TEXTURE_2D_ARRAY;
+    }
+ 
++   if (image_oes && gr->egl_external_shadow) {
++      /* The driver can only sample this image through samplerExternalOES.
++       * Import it into its own external texture and back gl_id with regular
++       * storage that vrend_blitter_refresh_external() fills from it. */
++      if (gr->target != GL_TEXTURE_2D || pr->nr_samples > 1 || pr->last_level) {
++         virgl_error("external-only EGL image needs a single-level 2D texture\n");
++         return EINVAL;
++      }
++      glGenTextures(1, &gr->egl_external_id);
++      glBindTexture(GL_TEXTURE_EXTERNAL_OES, gr->egl_external_id);
++      glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, (GLeglImageOES) image_oes);
++      GLenum gl_err = glGetError();
++      if (gl_err != GL_NO_ERROR) {
++         virgl_error("glEGLImageTargetTexture2DOES(EXTERNAL_OES) failed: format %d gl error 0x%x\n",
++                     format, gl_err);
++         glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
++         glDeleteTextures(1, &gr->egl_external_id);
++         gr->egl_external_id = 0;
++         return EINVAL;
++      }
++      glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
++      glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
++      glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++      glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++      glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
++
++      /* gl_id is an ordinary texture, so don't treat it as an EGL image */
++      gr->storage_bits &= ~VREND_STORAGE_EGL_IMAGE;
++      image_oes = NULL;
++   }
++
+    glGenTextures(1, &gr->gl_id);
+    glBindTexture(gr->target, gr->gl_id);
+ 
+@@ -8851,6 +8921,10 @@ static int vrend_resource_alloc_texture(struct vrend_resource *gr,
+       if (has_bit(gr->storage_bits, VREND_STORAGE_GL_IMMUTABLE) &&
+           has_feature(feat_egl_image_storage)) {
+          glEGLImageTargetTexStorageEXT(gr->target, (GLeglImageOES) image_oes, NULL);
++         GLenum gl_err = glGetError();
++         if (gl_err != GL_NO_ERROR)
++            virgl_warn("glEGLImageTargetTexStorageEXT failed: format %d gl error 0x%x\n",
++                       format, gl_err);
+       } else if (has_feature(feat_egl_image)) {
+          gr->storage_bits &= ~VREND_STORAGE_GL_IMMUTABLE;
+          assert(gr->target == GL_TEXTURE_2D);
+@@ -9053,6 +9127,8 @@ void vrend_renderer_resource_destroy(struct vrend_resource *res)
+ {
+    if (has_bit(res->storage_bits, VREND_STORAGE_GL_TEXTURE)) {
+       glDeleteTextures(1, &res->gl_id);
++      if (res->egl_external_id)
++         glDeleteTextures(1, &res->egl_external_id);
+    } else if (has_bit(res->storage_bits, VREND_STORAGE_GL_BUFFER)) {
+       glDeleteBuffers(1, &res->gl_id);
+       if (res->tbo_tex_id)
+@@ -10139,6 +10215,9 @@ static int vrend_renderer_transfer_internal(struct vrend_context *ctx,
+    if (!vrend_hw_switch_context(ctx, true))
+       return EINVAL;
+ 
++   if (transfer_mode == VIRGL_TRANSFER_FROM_HOST)
++      vrend_resource_refresh_external(ctx, res, true);
++
+    assert(check_transfer_iovec(res, info));
+    if (info->iovec && info->iovec_cnt) {
+       iov = info->iovec;
+@@ -10196,7 +10275,8 @@ int vrend_renderer_transfer_iov(struct vrend_context *ctx,
+    }
+ 
+    if (!check_transfer_iovec(res, info)) {
+-      if (has_bit(res->storage_bits, VREND_STORAGE_EGL_IMAGE))
++      if (has_bit(res->storage_bits, VREND_STORAGE_EGL_IMAGE) ||
++          res->egl_external_shadow)
+          return 0;
+       else {
+          vrend_report_context_error(ctx, VIRGL_ERROR_CTX_ILLEGAL_RESOURCE, dst_handle);
+@@ -10859,10 +10939,12 @@ void vrend_renderer_resource_copy_region(struct vrend_context *ctx,
+       return;
+    }
+ 
++   vrend_resource_refresh_external(ctx, src_res, false);
++
+    comp_flags = VREND_COPY_COMPAT_FLAG_ALLOW_COMPRESSED;
+-   if (src_res->egl_image)
++   if (src_res->egl_image && !src_res->egl_external_shadow)
+       comp_flags |= VREND_COPY_COMPAT_FLAG_ONE_IS_EGL_IMAGE;
+-   if (dst_res->egl_image)
++   if (dst_res->egl_image && !dst_res->egl_external_shadow)
+       comp_flags ^= VREND_COPY_COMPAT_FLAG_ONE_IS_EGL_IMAGE;
+ 
+    if (has_feature(feat_copy_image) &&
+@@ -11398,6 +11480,8 @@ void vrend_renderer_blit(struct vrend_context *ctx,
+       return;
+    }
+ 
++   vrend_resource_refresh_external(ctx, src_res, false);
++
+    if (info->render_condition_enable == false)
+       vrend_pause_render_condition(ctx, true);
+ 
+@@ -11423,9 +11507,9 @@ void vrend_renderer_blit(struct vrend_context *ctx,
+                                    info->dst.box.width, info->dst.box.height, info->dst.box.depth,
+                                    info->dst.level);
+ 
+-   if (src_res->egl_image)
++   if (src_res->egl_image && !src_res->egl_external_shadow)
+       comp_flags |= VREND_COPY_COMPAT_FLAG_ONE_IS_EGL_IMAGE;
+-   if (dst_res->egl_image)
++   if (dst_res->egl_image && !dst_res->egl_external_shadow)
+       comp_flags ^= VREND_COPY_COMPAT_FLAG_ONE_IS_EGL_IMAGE;
+ 
+    /* resources that don't support texture views but require colorspace conversion
+@@ -13583,8 +13667,29 @@ vrend_renderer_pipe_resource_set_type(struct vrend_context *ctx,
+ 
+          gr->storage_bits |= VREND_STORAGE_EGL_IMAGE;
+ 
++         /* Some drivers (NVIDIA) only support sampling linear dma-bufs via
++          * GL_TEXTURE_EXTERNAL_OES. Import those as external textures and
++          * keep a regular shadow texture in gl_id that is refreshed from the
++          * external image before the resource is read.
++          */
++         gr->egl_external_shadow =
++            virgl_egl_dmabuf_is_external_only(egl, drm_format, args->modifier);
++         if (gr->egl_external_shadow) {
++            gr->egl_external_shadow =
++               vrend_blitter_external_supported(vrend_format_is_bgra(gr->base.format));
++            vrend_sync_make_current(ctx->sub->gl_context);
++            if (!gr->egl_external_shadow)
++               virgl_warn("%s: res %u is external-only but the external copy "
++                          "program is unavailable\n", __func__, res_id);
++         }
++         if (gr->egl_external_shadow)
++            virgl_debug("%s: res %u is external-only, using shadow texture\n",
++                        __func__, res_id);
++
+          ret = vrend_resource_alloc_texture(gr, virgl_format, gr->egl_image);
+          if (ret) {
++            if (gr->egl_external_id)
++               glDeleteTextures(1, &gr->egl_external_id);
+             virgl_egl_image_destroy(egl, gr->egl_image);
+             FREE(gr);
+             return ret;
+diff --git a/src/vrend/vrend_renderer.h b/src/vrend/vrend_renderer.h
+index ff3def31..59721b70 100644
+--- a/src/vrend/vrend_renderer.h
++++ b/src/vrend/vrend_renderer.h
+@@ -103,6 +103,16 @@ struct vrend_resource {
+    uint32_t num_iovs;
+    uint64_t mipmap_offsets[VR_MAX_TEXTURE_2D_LEVELS];
+    void *gbm_bo, *egl_image;
++   /* Dma-buf EGL images whose modifier the driver only supports as
++    * external_only (e.g. LINEAR on NVIDIA) are imported into a separate
++    * GL_TEXTURE_EXTERNAL_OES texture, and gl_id is a regular shadow texture
++    * that is refreshed from it with a shader blit before it is read. The
++    * refresh is done at most once per command submission, tracked by
++    * egl_external_refresh_seq.
++    */
++   GLuint egl_external_id;
++   bool egl_external_shadow;
++   uint64_t egl_external_refresh_seq;
+    void *aux_plane_egl_image[VIRGL_GBM_MAX_PLANES];
+    bool gbm_direct_transfer;
+ #ifdef WIN32
+@@ -468,6 +478,7 @@ int vrend_renderer_create_ctx0_fence(uint32_t fence_id);
+ int vrend_renderer_export_ctx0_fence(uint32_t fence_id, int* out_fd);
+ 
+ bool vrend_hw_switch_context(struct vrend_context *ctx, bool now);
++void vrend_renderer_begin_submit(void);
+ uint32_t vrend_renderer_object_insert(struct vrend_context *ctx, void *data,
+                                       uint32_t handle, enum virgl_object_type type);
+ void vrend_renderer_object_destroy(struct vrend_context *ctx, uint32_t handle);
+diff --git a/src/vrend/vrend_winsys_egl.c b/src/vrend/vrend_winsys_egl.c
+index 4ddcd0df..33cf406a 100644
+--- a/src/vrend/vrend_winsys_egl.c
++++ b/src/vrend/vrend_winsys_egl.c
+@@ -992,6 +992,51 @@ bool virgl_egl_export_fence(struct virgl_egl *egl, EGLSyncKHR fence, int *out_fd
+    return *out_fd != EGL_NO_NATIVE_FENCE_FD_ANDROID;
+ }
+ 
++/* Returns true when the host EGL driver reports that dma-bufs with this
++ * fourcc/modifier pair can only be sampled through GL_TEXTURE_EXTERNAL_OES
++ * (EGL_EXT_image_dma_buf_import_modifiers external_only). NVIDIA reports
++ * DRM_FORMAT_MOD_LINEAR as external_only; binding such images as
++ * GL_TEXTURE_2D silently reads them with the wrong layout.
++ */
++bool virgl_egl_dmabuf_is_external_only(struct virgl_egl *egl, uint32_t drm_format,
++                                       uint64_t drm_modifier)
++{
++   PFNEGLQUERYDMABUFMODIFIERSEXTPROC query_modifiers;
++   EGLuint64KHR *modifiers;
++   EGLBoolean *external_only;
++   EGLint count = 0;
++   bool ret = false;
++
++   if (!egl || !has_bit(egl->extension_bits, EGL_EXT_IMAGE_DMA_BUF_IMPORT_MODIFIERS))
++      return false;
++
++   query_modifiers = (PFNEGLQUERYDMABUFMODIFIERSEXTPROC)
++      eglGetProcAddress("eglQueryDmaBufModifiersEXT");
++   if (!query_modifiers)
++      return false;
++
++   if (!query_modifiers(egl->egl_display, (EGLint)drm_format, 0, NULL, NULL, &count) ||
++       count <= 0)
++      return false;
++
++   modifiers = calloc(count, sizeof(*modifiers));
++   external_only = calloc(count, sizeof(*external_only));
++   if (modifiers && external_only &&
++       query_modifiers(egl->egl_display, (EGLint)drm_format, count, modifiers,
++                       external_only, &count)) {
++      for (EGLint i = 0; i < count; i++) {
++         if (modifiers[i] == drm_modifier) {
++            ret = external_only[i] == EGL_TRUE;
++            break;
++         }
++      }
++   }
++
++   free(modifiers);
++   free(external_only);
++   return ret;
++}
++
+ bool virgl_egl_different_gpu(struct virgl_egl *egl)
+ {
+    return egl->different_gpu;
+diff --git a/src/vrend/vrend_winsys_egl.h b/src/vrend/vrend_winsys_egl.h
+index 4af897b8..f1231b7e 100644
+--- a/src/vrend/vrend_winsys_egl.h
++++ b/src/vrend/vrend_winsys_egl.h
+@@ -93,6 +93,8 @@ bool virgl_egl_client_wait_fence(struct virgl_egl *egl, EGLSyncKHR fence, bool b
+ bool virgl_egl_export_signaled_fence(struct virgl_egl *egl, int *out_fd);
+ bool virgl_egl_export_fence(struct virgl_egl *egl, EGLSyncKHR fence, int *out_fd);
+ bool virgl_egl_different_gpu(struct virgl_egl *egl);
++bool virgl_egl_dmabuf_is_external_only(struct virgl_egl *egl, uint32_t drm_format,
++                                       uint64_t drm_modifier);
+ const char *virgl_egl_error_string(EGLint error);
+ 
+ #ifdef WIN32
+-- 
+2.34.1
+
