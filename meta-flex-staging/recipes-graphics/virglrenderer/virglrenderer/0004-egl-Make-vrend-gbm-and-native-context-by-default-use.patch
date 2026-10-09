@@ -1,0 +1,179 @@
+From 5b8314344893c2f83268deeb92f34ac594e2c604 Mon Sep 17 00:00:00 2001
+From: Dmitry Osipenko <dmitry.osipenko@collabora.com>
+Date: Mon, 1 Jun 2026 18:03:47 +0300
+Subject: [PATCH 4/8] egl: Make vrend/gbm and native context by default use
+ same GPU as EGL display
+
+In multi-gpu setups virglrenderer picks first available GPU for rendering
+operations. This not guaranteed to work when EGL display uses other GPU,
+dmabuf importing may be not possible or perform poorly. Make vrend and nctx
+to pick same GPU that used by EGL display.
+
+Reviewed-by: Yiwei Zhang <zzyiwei@google.com>
+Reviewed-by:Pierre-Eric Pelloux-Prayer <pierre-eric.pelloux-prayer@amd.com>
+
+Upstream-Status: Backport
+
+Signed-off-by: Dmitry Osipenko <dmitry.osipenko@collabora.com>
+Part-of: <https://gitlab.freedesktop.org/virgl/virglrenderer/-/merge_requests/1640>
+(cherry picked from commit 7fcfce49616974dc7050fdbfb5bb915f4448d270)
+---
+ src/virglrenderer.c          | 25 ++++++------
+ src/vrend/vrend_winsys_egl.c | 75 +++++++++++++++++++++++++++++++++++-
+ src/vrend/vrend_winsys_egl.h |  2 +
+ 3 files changed, 89 insertions(+), 13 deletions(-)
+
+diff --git a/src/virglrenderer.c b/src/virglrenderer.c
+index 79717fcc..f6ddaf2c 100644
+--- a/src/virglrenderer.c
++++ b/src/virglrenderer.c
+@@ -207,6 +207,18 @@ static void per_context_fence_retire(struct virgl_context *ctx,
+                                   fence_id);
+ }
+ 
++static int get_drm_fd(void)
++{
++   if (state.cbs->version >= 2 && state.cbs->get_drm_fd)
++      return state.cbs->get_drm_fd(state.cookie);
++
++#ifdef HAVE_EPOXY_EGL_H
++   return virgl_egl_open_drm_fd(egl);
++#else
++   return -1;
++#endif
++}
++
+ int virgl_renderer_context_create_with_flags(uint32_t ctx_id,
+                                              uint32_t ctx_flags,
+                                              uint32_t nlen,
+@@ -689,14 +701,6 @@ static int make_current_surfaceless(virgl_renderer_gl_context ctx)
+    return 0;
+ }
+ 
+-static int get_drm_fd(void)
+-{
+-   if (state.cbs->get_drm_fd)
+-      return state.cbs->get_drm_fd(state.cookie);
+-
+-   return -1;
+-}
+-
+ static const struct vrend_if_cbs vrend_cbs = {
+    ctx0_fence_retire,
+    create_gl_context,
+@@ -939,10 +943,7 @@ int virgl_renderer_init(void *cookie, int flags, struct virgl_renderer_callbacks
+ 
+    if ((flags & VIRGL_RENDERER_ASYNC_FENCE_CB) &&
+        (flags & VIRGL_RENDERER_DRM)) {
+-      int drm_fd = -1;
+-
+-      if (cbs->version >= 2 && cbs->get_drm_fd)
+-         drm_fd = cbs->get_drm_fd(cookie);
++      int drm_fd = get_drm_fd();
+ 
+       ret = drm_renderer_init(drm_fd);
+       if (ret) {
+diff --git a/src/vrend/vrend_winsys_egl.c b/src/vrend/vrend_winsys_egl.c
+index 33cf406a..f34290b1 100644
+--- a/src/vrend/vrend_winsys_egl.c
++++ b/src/vrend/vrend_winsys_egl.c
+@@ -605,7 +605,7 @@ struct virgl_egl *virgl_egl_init_external(EGLDisplay egl_display)
+       goto fail;
+ 
+ #ifdef ENABLE_GBM
+-   gbm = virgl_gbm_init(-1);
++   gbm = virgl_gbm_init( virgl_egl_open_drm_fd(egl) );
+    egl->gbm = gbm;
+ #endif
+ 
+@@ -1065,3 +1065,76 @@ const char *virgl_egl_error_string(EGLint error)
+     default: return "Unknown error";
+     }
+ }
++
++int virgl_egl_open_drm_fd(struct virgl_egl *egl)
++{
++#if DETECT_OS_WINDOWS
++   return -1;
++#else
++   const char *drm_path = NULL;
++   EGLDeviceEXT device;
++
++   if (!egl || !egl->funcs.eglQueryDisplayAttrib || !egl->funcs.eglQueryDeviceString)
++      return -1;
++
++   if (!egl->funcs.eglQueryDisplayAttrib(egl->egl_display, EGL_DEVICE_EXT, (EGLAttrib *)&device))
++      return -1;
++
++#ifdef EGL_DRM_RENDER_NODE_FILE_EXT
++   drm_path = egl->funcs.eglQueryDeviceString(device,
++                                              EGL_DRM_RENDER_NODE_FILE_EXT);
++#endif
++
++#ifdef EGL_DRM_DEVICE_FILE_EXT
++   if (!drm_path) {
++      drm_path = egl->funcs.eglQueryDeviceString(device,
++                                                 EGL_DRM_DEVICE_FILE_EXT);
++
++#ifdef ENABLE_LIBDRM
++      if (drm_path) {
++         int fd = open(drm_path, O_RDWR | O_CLOEXEC);
++
++         /*
++          * EGL_DRM_RENDER_NODE_FILE_EXT may not be defined by the epoxy version
++          * we build against, or the EGL driver may not implement it, in which
++          * case drm_path above falls back to EGL_DRM_DEVICE_FILE_EXT, i.e. the
++          * DRM primary/master node. Rendering on a primary node requires DRM
++          * master/auth and some kernel drivers (e.g. amdgpu) reject rendering
++          * ioctls on it, so resolve and switch to the render node of the same
++          * GPU whenever libdrm can tell us its path.
++          */
++         drmDevicePtr drm_device;
++         if (drmGetDevice2(fd, 0, &drm_device) == 0) {
++            int render_fd = -1;
++
++            if ((drm_device->available_nodes & (1 << DRM_NODE_RENDER)) &&
++                drm_device->nodes[DRM_NODE_RENDER]) {
++               render_fd = open(drm_device->nodes[DRM_NODE_RENDER],
++                                O_RDWR | O_CLOEXEC);
++
++               virgl_debug("%s: using render node %s\n",
++                           __func__, drm_device->nodes[DRM_NODE_RENDER]);
++            }
++
++            drmFreeDevice(&drm_device);
++
++            if (render_fd >= 0) {
++               close(fd);
++               return render_fd;
++            }
++         }
++
++         close(fd);
++      }
++#endif
++   }
++#endif
++
++   if (!drm_path)
++      return -1;
++
++   virgl_debug("%s: %s\n", __func__, drm_path);
++
++   return open(drm_path, O_RDWR | O_CLOEXEC);
++#endif
++}
+diff --git a/src/vrend/vrend_winsys_egl.h b/src/vrend/vrend_winsys_egl.h
+index f1231b7e..fb55b172 100644
+--- a/src/vrend/vrend_winsys_egl.h
++++ b/src/vrend/vrend_winsys_egl.h
+@@ -103,4 +103,6 @@ bool virgl_egl_win32_create_d3d11_texture2d(struct virgl_egl *egl,
+ EGLImageKHR virgl_egl_win32_image_from_d3d11_texture2d(struct virgl_egl *egl, ID3D11Texture2D *tex);
+ #endif
+ 
++int virgl_egl_open_drm_fd(struct virgl_egl *egl);
++
+ #endif
+-- 
+2.34.1
+

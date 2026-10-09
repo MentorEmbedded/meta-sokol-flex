@@ -1,0 +1,106 @@
+From f5defeb7fa8492a41fc1240124e1ddf998176f52 Mon Sep 17 00:00:00 2001
+From: Ahsan Hussain <ahsan.hussain@siemens.com>
+Date: Tue, 6 Oct 2026 10:43:50 +0500
+Subject: [PATCH 8/8] vrend: replace the Mesa GL_VERSION gate of the GBM layout
+ with an import probe
+
+Commit 025c3e9b ("vrend: Prepare to utilize GBM allocation by default
+when using EGL") limited the GBM layout to Mesa drivers because it forced
+LINEAR display buffers at the time. Commit 652e8d8b ("vrend: Support
+tiled gbm allocation") allocates them through the Venus interop
+allocator with the modifiers the host driver prefers and enabled the GBM
+layout by default, but kept the vendor check. With it, the GBM layout,
+VIRGL_CAP_V2_QUERY_FORMAT_MODIFIER and zero-copy Venus WSI stay off on
+other drivers such as NVIDIA unless VIRGL_GBM_LAYOUT_FORCE_ENABLE is set.
+
+Drop the vendor check. The interop init already requires a Vulkan device
+on the GBM GPU with dma-buf and modifier support; additionally check
+that the EGL display can import a buffer from the interop allocator, and
+keep the GBM layout off otherwise, e.g. when GBM and EGL are on
+different GPUs. VIRGL_GBM_LAYOUT_DISABLE still turns the GBM layout off,
+and VIRGL_GBM_LAYOUT_FORCE_ENABLE skips the probe.
+
+Tested on an NVIDIA host (595.58.03) with a Venus + virgl guest running
+Weston and a guest Mesa whose Venus WSI does not force the prime blit on
+NVIDIA: The client buffers are now shared with tiled modifiers be default,
+vkmark --winsys=wayland 5571 (previously 1782 on the prime-blit path).
+
+Upstream-Status: Pending
+
+Signed-off-by: Ahsan Hussain <ahsan.hussain@siemens.com>
+---
+ src/vrend/vrend_renderer.c | 44 ++++++++++++++++++++++++++++++++------
+ 1 file changed, 38 insertions(+), 6 deletions(-)
+
+diff --git a/src/vrend/vrend_renderer.c b/src/vrend/vrend_renderer.c
+index b5c049f5..f72b7a10 100644
+--- a/src/vrend/vrend_renderer.c
++++ b/src/vrend/vrend_renderer.c
+@@ -7751,17 +7751,41 @@ static bool vrend_use_gbm_layout_feature(UNUSED uint32_t flags)
+    if (!(flags & VREND_USE_GBM_LAYOUT))
+       return false;
+ 
+-   /* gbm-layout needs a linear modifier quirk today, enable it by default only for
+-    * drivers known to work properly */
+-   if (!strstr((const char *) glGetString(GL_VERSION), "Mesa"))
+-      return false;
+-
+    return true;
+ #else
+    return false;
+ #endif
+ }
+ 
++#if defined(ENABLE_GBM_ALLOCATION) && !defined(MINIGBM)
++/*
++ * Check that the EGL display can import a buffer allocated by the Venus
++ * interop allocator, i.e. with the modifier it picked. This fails e.g. when
++ * the GBM device and the EGL display are on different GPUs.
++ */
++static bool vrend_venus_interop_importable(void)
++{
++#ifdef HAVE_EPOXY_EGL_H
++   if (!egl)
++      return false;
++
++   struct gbm_bo *bo = vrend_vk_gbm_bo_create(gbm->device, 64, 64,
++                                              GBM_FORMAT_ARGB8888);
++   if (!bo)
++      return false;
++
++   void *image = virgl_egl_image_from_gbm_bo(egl, bo);
++   if (image)
++      virgl_egl_image_destroy(egl, image);
++   gbm_bo_destroy(bo);
++
++   return image != NULL;
++#else
++   return true;
++#endif
++}
++#endif
++
+ int vrend_renderer_init(const struct vrend_if_cbs *cbs, uint32_t flags)
+ {
+    bool gles;
+@@ -7942,8 +7966,16 @@ int vrend_renderer_init(const struct vrend_if_cbs *cbs, uint32_t flags)
+    vrend_state.gbm_layout_feat = vrend_use_gbm_layout_feature(flags);
+ 
+ #if defined(ENABLE_GBM_ALLOCATION) && !defined(MINIGBM)
+-   if (gbm && gbm->device && vrend_state.gbm_layout_feat)
++   if (gbm && gbm->device && vrend_state.gbm_layout_feat) {
+       vrend_init_venus_interop(gbm->device);
++      if (vrend_has_venus_interop() &&
++          !debug_get_bool_option("VIRGL_GBM_LAYOUT_FORCE_ENABLE", false) &&
++          !vrend_venus_interop_importable()) {
++         virgl_info("EGL can't import Venus interop buffers, disabling GBM layout\n");
++         vrend_deinit_venus_interop();
++         vrend_state.gbm_layout_feat = false;
++      }
++   }
+ #endif
+ 
+    return 0;
+-- 
+2.34.1
+

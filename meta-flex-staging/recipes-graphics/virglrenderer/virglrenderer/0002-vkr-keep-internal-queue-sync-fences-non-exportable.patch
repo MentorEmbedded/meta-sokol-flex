@@ -1,0 +1,53 @@
+From ad4d310d927ea62d96f035296acb819860a5b478 Mon Sep 17 00:00:00 2001
+From: Ahsan Hussain <ahsan.hussain@siemens.com>
+Date: Tue, 6 Oct 2026 00:12:38 +0500
+Subject: [PATCH 2/8] vkr: keep internal queue sync fences non-exportable
+
+The queue sync fences are created, submitted, waited on, reset and
+destroyed by the Venus renderer itself and are never exported. Commit
+e37c9b0b ("vkr: make internal fences exportable") made them SYNC_FD
+exportable for a per-context virgl_renderer_export_fence() that never
+uses them.
+
+Exportable fences can be much more expensive to wait on. With the NVIDIA
+595.58.03 driver (aarch64), vkWaitForFences() takes about 10.08 ms for an
+exportable fence versus 0.10 ms for a plain one, because the driver polls
+in 10 ms sleeps. The sync thread waits on one of these fences for every
+retired guest fence, so every Venus submission picks up that latency.
+
+Create the fences without VkExportFenceCreateInfo. Guest-created fences,
+vkResetFenceResourceMESA and virgl's fence export path are unchanged.
+
+Upstream-Status: Pending
+
+Signed-off-by: Ahsan Hussain <ahsan.hussain@siemens.com>
+---
+ src/venus/vkr_queue.c | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/src/venus/vkr_queue.c b/src/venus/vkr_queue.c
+index 61b94bef..24e27755 100644
+--- a/src/venus/vkr_queue.c
++++ b/src/venus/vkr_queue.c
+@@ -28,13 +28,13 @@ vkr_device_alloc_queue_sync(struct vkr_device *dev,
+       if (!sync)
+          return NULL;
+ 
+-      const VkExportFenceCreateInfo export_info = {
+-         .sType = VK_STRUCTURE_TYPE_EXPORT_FENCE_CREATE_INFO,
+-         .handleTypes = VK_EXTERNAL_FENCE_HANDLE_TYPE_SYNC_FD_BIT,
+-      };
++      /* These fences are only waited on by the sync thread and are never
++       * exported. Keep them non-exportable: some drivers (e.g. NVIDIA)
++       * implement vkWaitForFences on exportable fences as a 10 ms sleep-poll,
++       * which adds up to 10 ms of latency to every retired virtio-gpu fence.
++       */
+       const struct VkFenceCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+-         .pNext = dev->physical_device->KHR_external_fence_fd ? &export_info : NULL,
+       };
+       VkResult result =
+          vk->CreateFence(dev->base.handle.device, &create_info, NULL, &sync->fence);
+-- 
+2.34.1
+

@@ -1,0 +1,109 @@
+From ee8c4164a0d270e39618368d7044bad99aaf6a10 Mon Sep 17 00:00:00 2001
+From: Ahsan Hussain <ahsan.hussain@siemens.com>
+Date: Tue, 6 Oct 2026 02:32:25 +0500
+Subject: [PATCH 7/8] vrend: don't back scanout resources with GBM if their
+ texture can't be exported
+
+Embedders display scanout resources by exporting the resource's GL
+texture as a dma-buf through EGL_KHR_gl_texture_2D_image and
+EGL_MESA_image_dma_buf_export (QEMU's dbus and egl-headless displays, or
+virgl_renderer_get_fd_for_texture*()). With Venus interop enabled,
+scanout resources are allocated from GBM and their texture is an
+EGLImage target. EGL_KHR_gl_texture_2D_image allows drivers to refuse an
+EGLImage of such a texture, and NVIDIA does (EGL_BAD_ACCESS), so the
+display breaks once vrend's GBM device and the EGL display are on the
+same GPU. QEMU logs "failed to export dmabuf" for every frame.
+
+Probe once whether a texture backed by a GBM buffer can be exported and,
+if it can't, keep scanout resources in regular GL storage.
+
+Upstream-Status: Pending
+
+Signed-off-by: Ahsan Hussain <ahsan.hussain@siemens.com>
+---
+ src/vrend/vrend_renderer.c | 55 ++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 55 insertions(+)
+
+diff --git a/src/vrend/vrend_renderer.c b/src/vrend/vrend_renderer.c
+index 69b4b585..b5c049f5 100644
+--- a/src/vrend/vrend_renderer.c
++++ b/src/vrend/vrend_renderer.c
+@@ -404,6 +404,8 @@ struct global_renderer_state {
+ #endif
+    bool d3d_share_texture : 1;
+    bool gbm_layout_feat : 1;
++   bool gbm_scanout_probed : 1;
++   bool gbm_scanout_exportable : 1;
+ 
+    /* incremented for each command buffer submission */
+    uint64_t submit_seq;
+@@ -8759,6 +8761,56 @@ fail:
+ #endif
+ }
+ 
++#if defined(HAVE_EPOXY_EGL_H) && defined(ENABLE_GBM_ALLOCATION)
++/*
++ * Embedders scan out a resource by exporting its GL texture as a dma-buf
++ * (EGL_KHR_gl_texture_2D_image + EGL_MESA_image_dma_buf_export), e.g. QEMU's
++ * dbus and egl-headless displays. EGL_KHR_gl_texture_2D_image allows drivers
++ * to refuse creating an EGLImage from a texture that is itself an EGLImage
++ * target (NVIDIA does), which would break the display of scanout resources
++ * backed by GBM buffers. Probe this once.
++ */
++static bool vrend_gbm_scanout_exportable(void)
++{
++   if (vrend_state.gbm_scanout_probed)
++      return vrend_state.gbm_scanout_exportable;
++
++   vrend_state.gbm_scanout_probed = true;
++   vrend_state.gbm_scanout_exportable = false;
++
++   struct gbm_bo *bo = gbm_bo_create(gbm->device, 16, 16, GBM_FORMAT_ARGB8888,
++                                     GBM_BO_USE_RENDERING);
++   if (!bo)
++      return false;
++
++   void *image = virgl_egl_image_from_gbm_bo(egl, bo);
++   if (image) {
++      GLint prev_tex = 0;
++      GLuint tex;
++      int fd = -1, stride, offset;
++
++      glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_tex);
++      glGenTextures(1, &tex);
++      glBindTexture(GL_TEXTURE_2D, tex);
++      glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, (GLeglImageOES)image);
++      if (glGetError() == GL_NO_ERROR &&
++          !virgl_egl_get_fd_for_texture2(egl, tex, &fd, &stride, &offset)) {
++         vrend_state.gbm_scanout_exportable = true;
++         close(fd);
++      }
++      glBindTexture(GL_TEXTURE_2D, prev_tex);
++      glDeleteTextures(1, &tex);
++      virgl_egl_image_destroy(egl, image);
++   }
++   gbm_bo_destroy(bo);
++
++   if (!vrend_state.gbm_scanout_exportable)
++      virgl_info("GBM-backed textures can't be exported, not using GBM for scanout resources\n");
++
++   return vrend_state.gbm_scanout_exportable;
++}
++#endif
++
+ /*
+  * When GBM allocation is enabled, this function creates a GBM buffer and
+  * EGL image given certain flags.
+@@ -8791,6 +8843,9 @@ static void vrend_resource_gbm_init(struct vrend_resource *gr, uint32_t format)
+       return;
+ #endif
+ 
++   if ((gr->base.bind & VIRGL_BIND_SCANOUT) && !vrend_gbm_scanout_exportable())
++      return;
++
+    if (!gbm_device_is_format_supported(gbm->device, gbm_format, gbm_flags))
+       return;
+ 
+-- 
+2.34.1
+
