@@ -1,0 +1,215 @@
+From d6a104129f243f70dfda41d7bb2e194b32428fad Mon Sep 17 00:00:00 2001
+From: Ahsan Hussain <ahsan.hussain@siemens.com>
+Date: Tue, 6 Oct 2026 09:42:19 +0500
+Subject: [PATCH 2/3] wsi: fall back to a buffer blit when no winsys modifier
+ is renderable
+
+On the native image path, wsi_configure_native_image() filters the
+modifiers offered by the winsys through
+vkGetPhysicalDeviceImageFormatProperties2() and, if none is left, asserts
+"This should never happen because LINEAR should always be available" and
+fails swapchain creation.
+
+LINEAR is not always renderable, though, and drivers do not consistently
+reject it in the image format query. With the NVIDIA 595 driver, LINEAR
+B8G8R8A8 has no COLOR_ATTACHMENT in its drmFormatModifierTilingFeatures,
+yet vkGetPhysicalDeviceImageFormatProperties2() succeeds for it with
+COLOR_ATTACHMENT usage. A compositor that only offers LINEAR then gets a
+swapchain the driver can't render to correctly, and wsi has no way to
+recover once the native path has been chosen.
+
+Check the modifier tiling features against the swapchain usage as well,
+both when choosing between the native and the buffer-blit path and when
+filtering modifiers for native images. When none of the winsys modifiers
+supports the usage, use the buffer-blit path, which renders to an
+optimal-tiling image and copies to a LINEAR buffer. Mutable-format
+swapchains are left to the driver, as their usage may only apply to a
+view format.
+
+Replaces the Wayland workaround from commit 1a302155ee2 ("venus: force
+prime blit on Nvidia GPU") with a WSI modifier-capability check and
+buffer-blit fallback.
+
+Upstream-Status: Pending
+
+Signed-off-by: Ahsan Hussain <ahsan.hussain@siemens.com>
+---
+ src/vulkan/wsi/wsi_common.c         |  5 +-
+ src/vulkan/wsi/wsi_common_drm.c     | 97 ++++++++++++++++++++++++++++-
+ src/vulkan/wsi/wsi_common_private.h |  1 +
+ 3 files changed, 100 insertions(+), 3 deletions(-)
+
+diff --git a/src/vulkan/wsi/wsi_common.c b/src/vulkan/wsi/wsi_common.c
+index a51c9853200..2b19600269a 100644
+--- a/src/vulkan/wsi/wsi_common.c
++++ b/src/vulkan/wsi/wsi_common.c
+@@ -398,6 +398,7 @@ wsi_device_setup_syncobj_fd(struct wsi_device *wsi_device,
+ 
+ static enum wsi_swapchain_blit_type
+ get_blit_type(const struct wsi_device *wsi,
++              const VkSwapchainCreateInfoKHR *pCreateInfo,
+               const struct wsi_base_image_params *params,
+               VkDevice device)
+ {
+@@ -412,7 +413,7 @@ get_blit_type(const struct wsi_device *wsi,
+    case WSI_IMAGE_TYPE_DRM: {
+       const struct wsi_drm_image_params *drm_params =
+          container_of(params, const struct wsi_drm_image_params, base);
+-      return wsi_drm_image_needs_buffer_blit(wsi, drm_params) ?
++      return wsi_drm_image_needs_buffer_blit(wsi, pCreateInfo, drm_params) ?
+          WSI_SWAPCHAIN_BUFFER_BLIT : WSI_SWAPCHAIN_NO_BLIT;
+    }
+ #endif
+@@ -507,7 +508,7 @@ wsi_swapchain_init(const struct wsi_device *wsi,
+    chain->wsi = wsi;
+    chain->device = _device;
+    chain->alloc = *pAllocator;
+-   chain->blit.type = get_blit_type(wsi, image_params, _device);
++   chain->blit.type = get_blit_type(wsi, pCreateInfo, image_params, _device);
+    chain->present_wait_enabled =
+       device->enabled_features.presentWait ||
+       (pCreateInfo->flags & VK_SWAPCHAIN_CREATE_PRESENT_WAIT_2_BIT_KHR);
+diff --git a/src/vulkan/wsi/wsi_common_drm.c b/src/vulkan/wsi/wsi_common_drm.c
+index dbf65b2d423..3a100ce1b14 100644
+--- a/src/vulkan/wsi/wsi_common_drm.c
++++ b/src/vulkan/wsi/wsi_common_drm.c
+@@ -575,6 +575,92 @@ wsi_create_native_image_mem(const struct wsi_swapchain *chain,
+                             const struct wsi_image_info *info,
+                             struct wsi_image *image);
+ 
++static VkFormatFeatureFlags
++wsi_usage_to_format_features(VkImageUsageFlags2KHR usage)
++{
++   VkFormatFeatureFlags features = 0;
++   if (usage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT)
++      features |= VK_FORMAT_FEATURE_TRANSFER_SRC_BIT;
++   if (usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT)
++      features |= VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
++   if (usage & VK_IMAGE_USAGE_SAMPLED_BIT)
++      features |= VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
++   if (usage & VK_IMAGE_USAGE_STORAGE_BIT)
++      features |= VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT;
++   if (usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
++      features |= VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT;
++   return features;
++}
++
++/* Not every driver rejects a modifier in vkGetPhysicalDeviceImageFormatProperties2
++ * when its tiling features lack what the usage needs (e.g. NVIDIA reports no
++ * COLOR_ATTACHMENT for LINEAR but still accepts it), so check the features
++ * explicitly as well. Mutable-format images may get the usage from a view
++ * format instead, so leave those to the driver.
++ */
++static bool
++wsi_modifier_supports_usage(const VkDrmFormatModifierPropertiesEXT *props,
++                            VkImageUsageFlags2KHR usage, bool mutable_format)
++{
++   if (mutable_format)
++      return true;
++
++   const VkFormatFeatureFlags required = wsi_usage_to_format_features(usage);
++   return (props->drmFormatModifierTilingFeatures & required) == required;
++}
++
++/* Returns true if at least one of the modifiers offered by the winsys is
++ * supported by the driver for the swapchain usage.
++ */
++static bool
++wsi_drm_has_usable_modifier(const struct wsi_device *wsi,
++                            const VkSwapchainCreateInfoKHR *pCreateInfo,
++                            const struct wsi_drm_image_params *params)
++{
++   struct VkDrmFormatModifierPropertiesListEXT modifier_props_list = {
++      .sType = VK_STRUCTURE_TYPE_DRM_FORMAT_MODIFIER_PROPERTIES_LIST_EXT,
++   };
++   VkFormatProperties2 format_props = {
++      .sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2,
++      .pNext = &modifier_props_list,
++   };
++   wsi->GetPhysicalDeviceFormatProperties2(wsi->pdevice,
++                                           pCreateInfo->imageFormat,
++                                           &format_props);
++   if (modifier_props_list.drmFormatModifierCount == 0)
++      return false;
++
++   STACK_ARRAY(VkDrmFormatModifierPropertiesEXT, modifier_props,
++               modifier_props_list.drmFormatModifierCount);
++   if (!modifier_props)
++      return true;
++
++   modifier_props_list.pDrmFormatModifierProperties = modifier_props;
++   wsi->GetPhysicalDeviceFormatProperties2(wsi->pdevice,
++                                           pCreateInfo->imageFormat,
++                                           &format_props);
++
++   const VkImageUsageFlags2KHR usage = vk_swapchain_usage_flags(pCreateInfo);
++   const bool mutable_format =
++      pCreateInfo->flags & VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR;
++   bool found = false;
++   for (uint32_t l = 0; l < params->num_modifier_lists && !found; l++) {
++      for (uint32_t i = 0; i < params->num_modifiers[l] && !found; i++) {
++         for (uint32_t j = 0; j < modifier_props_list.drmFormatModifierCount; j++) {
++            if (modifier_props[j].drmFormatModifier == params->modifiers[l][i] &&
++                wsi_modifier_supports_usage(&modifier_props[j], usage,
++                                            mutable_format)) {
++               found = true;
++               break;
++            }
++         }
++      }
++   }
++
++   STACK_ARRAY_FINISH(modifier_props);
++   return found;
++}
++
+ static VkResult
+ wsi_configure_native_image(const struct wsi_swapchain *chain,
+                            const VkSwapchainCreateInfoKHR *pCreateInfo,
+@@ -682,6 +768,8 @@ wsi_configure_native_image(const struct wsi_swapchain *chain,
+                                                                &format_info,
+                                                                &format_props);
+          if (result == VK_SUCCESS &&
++             wsi_modifier_supports_usage(&info->modifier_props[i], image_usage,
++                                         info->create.flags & VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT) &&
+              pCreateInfo->imageExtent.width <= format_props.imageFormatProperties.maxExtent.width &&
+              pCreateInfo->imageExtent.height <= format_props.imageFormatProperties.maxExtent.height)
+             info->modifier_props[info->modifier_prop_count++] = info->modifier_props[i];
+@@ -908,6 +996,7 @@ wsi_configure_prime_image(UNUSED const struct wsi_swapchain *chain,
+ 
+ bool
+ wsi_drm_image_needs_buffer_blit(const struct wsi_device *wsi,
++                                const VkSwapchainCreateInfoKHR *pCreateInfo,
+                                 const struct wsi_drm_image_params *params)
+ {
+    if (WSI_DEBUG & WSI_DEBUG_BUFFER)
+@@ -916,7 +1005,13 @@ wsi_drm_image_needs_buffer_blit(const struct wsi_device *wsi,
+    if (!params->same_gpu)
+       return true;
+ 
+-   if (params->num_modifier_lists > 0 || wsi->supports_scanout)
++   /* If none of the winsys modifiers can be rendered to by the driver (e.g.
++    * the compositor only offers LINEAR), blit to a linear buffer instead.
++    */
++   if (params->num_modifier_lists > 0)
++      return !wsi_drm_has_usable_modifier(wsi, pCreateInfo, params);
++
++   if (wsi->supports_scanout)
+       return false;
+ 
+    return true;
+diff --git a/src/vulkan/wsi/wsi_common_private.h b/src/vulkan/wsi/wsi_common_private.h
+index 3d2cd7d2e51..55c9692e3d0 100644
+--- a/src/vulkan/wsi/wsi_common_private.h
++++ b/src/vulkan/wsi/wsi_common_private.h
+@@ -381,6 +381,7 @@ wsi_select_device_memory_type(const struct wsi_device *wsi,
+ 
+ bool
+ wsi_drm_image_needs_buffer_blit(const struct wsi_device *wsi,
++                                const VkSwapchainCreateInfoKHR *pCreateInfo,
+                                 const struct wsi_drm_image_params *params);
+ 
+ enum wsi_swapchain_blit_type
+-- 
+2.34.1
+

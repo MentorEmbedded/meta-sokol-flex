@@ -1,0 +1,397 @@
+From 51c5d96543118c4b102b5cfcfbf9e44a7535b903 Mon Sep 17 00:00:00 2001
+From: Dmitry Osipenko <dmitry.osipenko@collabora.com>
+Date: Sun, 5 Jul 2026 23:02:22 +0300
+Subject: [PATCH 1/3] virgl: Support tiled gbm modifiers
+
+Support new vrend protocol extension that allows guest to query
+available format-modifier pairs from host and wire it up for
+shared buffers allocation. Now vrend works more efficiently in
+conjunction with venus, allocating tiled WSI framebuffers.
+
+Upstream-Status: Backport [main]
+
+Signed-off-by: Dmitry Osipenko <dmitry.osipenko@collabora.com>
+Part-of: <https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/43000>
+(cherry picked from commit c1ca2c890eb8a6a3a2ea61011b635f62bf2d2e98)
+---
+ src/gallium/drivers/virgl/virgl_encode.c   |   7 ++
+ src/gallium/drivers/virgl/virgl_encode.h   |   3 +
+ src/gallium/drivers/virgl/virgl_resource.c |  65 +++++++++++--
+ src/gallium/drivers/virgl/virgl_resource.h |   2 +
+ src/gallium/drivers/virgl/virgl_screen.c   | 101 +++++++++++++++++++++
+ src/gallium/drivers/virgl/virgl_screen.h   |  12 +++
+ src/virtio/virtio-gpu/virgl_hw.h           |   1 +
+ src/virtio/virtio-gpu/virgl_protocol.h     |  15 +++
+ 8 files changed, 197 insertions(+), 9 deletions(-)
+
+diff --git a/src/gallium/drivers/virgl/virgl_encode.c b/src/gallium/drivers/virgl/virgl_encode.c
+index 117ee96d52c..93549d37462 100644
+--- a/src/gallium/drivers/virgl/virgl_encode.c
++++ b/src/gallium/drivers/virgl/virgl_encode.c
+@@ -1901,3 +1901,10 @@ void virgl_encoder_get_layout(struct virgl_context *ctx,
+    virgl_encoder_write_res(ctx, out_res);
+    virgl_encoder_write_res(ctx, res);
+ }
++
++void virgl_encoder_query_gbm_format_modifier(struct virgl_context *ctx,
++                                             struct virgl_resource *res)
++{
++   virgl_encoder_write_cmd_dword(ctx, VIRGL_CMD0(VIRGL_CCMD_QUERY_GBM_FORMAT_MODIFIER, 0, VIRGL_QUERY_FORMAT_MODIFIER_SIZE));
++   virgl_encoder_write_res(ctx, res);
++}
+diff --git a/src/gallium/drivers/virgl/virgl_encode.h b/src/gallium/drivers/virgl/virgl_encode.h
+index 627ba4468c1..ee1f20c7bd9 100644
+--- a/src/gallium/drivers/virgl/virgl_encode.h
++++ b/src/gallium/drivers/virgl/virgl_encode.h
+@@ -345,6 +345,9 @@ void virgl_encoder_get_layout(struct virgl_context *ctx,
+                               struct virgl_resource *out_res,
+                               struct virgl_resource *res);
+ 
++void virgl_encoder_query_gbm_format_modifier(struct virgl_context *ctx,
++                                             struct virgl_resource *res);
++
+ enum virgl_formats pipe_to_virgl_format(enum pipe_format format);
+ enum pipe_format virgl_to_pipe_format(enum virgl_formats format);
+ #endif
+diff --git a/src/gallium/drivers/virgl/virgl_resource.c b/src/gallium/drivers/virgl/virgl_resource.c
+index 9a163ff9c73..374d69a9274 100644
+--- a/src/gallium/drivers/virgl/virgl_resource.c
++++ b/src/gallium/drivers/virgl/virgl_resource.c
+@@ -683,7 +683,7 @@ virgl_resource_async_query_gbm_layout(struct pipe_screen *screen,
+    if (!(bind & PIPE_BIND_SHARED))
+       return;
+ 
+-   if (!(vs->caps.caps.v2.capability_bits_v2 & VIRGL_CAP_V2_RESOURCE_LAYOUT))
++   if (!(vs->caps.caps.v2.capability_bits_v2 & VIRGL_CAP_V2_QUERY_FORMAT_MODIFIER))
+       return;
+ 
+    out_res = (struct virgl_resource *)
+@@ -708,8 +708,9 @@ virgl_resource_async_query_gbm_layout(struct pipe_screen *screen,
+ 
+ static size_t virgl_resource_shared_tex_size(struct virgl_resource *res)
+ {
+-   size_t aligned_stride = align(res->metadata.stride[0], 256);
++   size_t aligned_stride = align(res->metadata.stride[0], 1024);
+    struct virgl_resource_metadata metadata = {};
++   struct pipe_resource pres = res->b;
+ 
+    /*
+     * Size of a shared buffer is validated by WSI. WSI retrieves BO size
+@@ -717,10 +718,13 @@ static size_t virgl_resource_shared_tex_size(struct virgl_resource *res)
+     * by a GBM BO on host, WSI validation may fail for a classic resource
+     * because we will tell WSI to use stride of the host's GBM BO that won't
+     * match guest BO stride. Mitigate this problem by using stride aligned to
+-    * 256 bytes for estimated buffer size, which is a max possible alignment
+-    * that GPUs are using today.
++    * 1024 bytes for estimated buffer size, which is a max possible alignment
++    * that GPUs are using today, and rounding height to a common 64x64
++    * block size.
+     */
+-   virgl_resource_layout(&res->b, &metadata, 0, aligned_stride, 0, 0);
++   pres.height0 = align(pres.height0, 64);
++
++   virgl_resource_layout(&pres, &metadata, 0, aligned_stride, 0, 0);
+ 
+    return metadata.total_size;
+ }
+@@ -806,12 +810,33 @@ virgl_resource_create_with_modifiers(struct pipe_screen *screen,
+                                      const uint64_t *modifiers,
+                                      int count)
+ {
+-   if (!drm_find_modifier(DRM_FORMAT_MOD_LINEAR, modifiers, count)) {
+-        mesa_loge("unsupported modifier requested\n");
+-        return NULL;
++   struct virgl_screen *vscreen = virgl_screen(screen);
++   uint32_t vformat = pipe_to_virgl_format(templ->format);
++   uint64_t mod = DRM_FORMAT_MOD_LINEAR;
++   struct pipe_resource vtempl = *templ;
++
++   if (vtempl.bind & PIPE_BIND_SHARED) {
++      virgl_screen_sync_format_modifier(vscreen);
++
++      for (int i = 0; i < vscreen->gbm.list.num; i++) {
++         if (vscreen->gbm.list.formats[i].virgl_format == vformat) {
++            if (drm_find_modifier(vscreen->gbm.list.formats[i].modifier,
++                                  modifiers, count))
++               mod = vscreen->gbm.list.formats[i].modifier;
++            break;
++         }
++      }
++
++      if (mod == DRM_FORMAT_MOD_LINEAR)
++         vtempl.bind |= PIPE_BIND_LINEAR;
+    }
+ 
+-   return virgl_resource_create_front(screen, templ, NULL);
++   if (!drm_find_modifier(mod, modifiers, count)) {
++      mesa_loge("unsupported modifier requested\n");
++      return NULL;
++   }
++
++   return virgl_resource_create_front(screen, &vtempl, NULL);
+ }
+ #endif
+ 
+@@ -943,6 +968,28 @@ virgl_resource_get_param(struct pipe_screen *screen,
+       else
+          *value = res->metadata.modifier;
+       return true;
++   case PIPE_RESOURCE_PARAM_NPLANES:
++      *value = util_resource_num(resource);
++      return true;
++    case PIPE_RESOURCE_PARAM_DISJOINT_PLANES:
++        *value = true;
++        return true;
++   case PIPE_RESOURCE_PARAM_STRIDE:
++      virgl_resource_sync_gbm_layout(res);
++
++      if (res->metadata.gbm.layout.planes[0].stride)
++         *value = res->metadata.gbm.layout.planes[plane].stride;
++      else
++         return false;
++      return true;
++   case PIPE_RESOURCE_PARAM_OFFSET:
++      virgl_resource_sync_gbm_layout(res);
++
++      if (res->metadata.gbm.layout.planes[0].stride)
++         *value = res->metadata.gbm.layout.planes[plane].offset;
++      else
++         return false;
++      return true;
+    default:
+       return false;
+    }
+diff --git a/src/gallium/drivers/virgl/virgl_resource.h b/src/gallium/drivers/virgl/virgl_resource.h
+index 76dc5ee37d8..1ddba054816 100644
+--- a/src/gallium/drivers/virgl/virgl_resource.h
++++ b/src/gallium/drivers/virgl/virgl_resource.h
+@@ -165,6 +165,8 @@ static inline unsigned pipe_to_virgl_bind(const struct virgl_screen *vs,
+    if (pbind & PIPE_BIND_COMMAND_ARGS_BUFFER)
+       if (vs->caps.caps.v2.capability_bits & VIRGL_CAP_BIND_COMMAND_ARGS)
+          outbind |= VIRGL_BIND_COMMAND_ARGS;
++   if (pbind & PIPE_BIND_LINEAR)
++      outbind |= VIRGL_BIND_LINEAR;
+ 
+    /* Staging resources should only be created directly through the winsys,
+     * not using pipe_resources.
+diff --git a/src/gallium/drivers/virgl/virgl_screen.c b/src/gallium/drivers/virgl/virgl_screen.c
+index 66b3d3d6368..8212fc26003 100644
+--- a/src/gallium/drivers/virgl/virgl_screen.c
++++ b/src/gallium/drivers/virgl/virgl_screen.c
+@@ -40,6 +40,10 @@
+ #include "virgl_context.h"
+ #include "virgl_encode.h"
+ 
++#if !defined(_WIN32)
++#include "drm-uapi/drm_fourcc.h"
++#endif
++
+ int virgl_debug = 0;
+ const struct debug_named_value virgl_debug_options[] = {
+    { "verbose",         VIRGL_DEBUG_VERBOSE,                 NULL },
+@@ -973,6 +977,99 @@ virgl_screen_get_fd(struct pipe_screen *pscreen)
+       return -1;
+ }
+ 
++#if !defined(_WIN32)
++static void
++virgl_screen_query_dmabuf_modifiers(struct pipe_screen *pscreen,
++                                    enum pipe_format format, int max,
++                                    uint64_t *modifiers,
++                                    unsigned int *external_only,
++                                    int *count)
++{
++   struct virgl_screen *vscreen = virgl_screen(pscreen);
++   uint32_t vformat = pipe_to_virgl_format(format);
++   uint64_t mod = DRM_FORMAT_MOD_LINEAR;
++
++   virgl_screen_sync_format_modifier(vscreen);
++
++   for (int i = 0; i < vscreen->gbm.list.num; i++) {
++      if (vscreen->gbm.list.formats[i].virgl_format == vformat) {
++         mod = vscreen->gbm.list.formats[i].modifier;
++         break;
++      }
++   }
++
++   if (max) {
++      *count = MIN2(max, 2);
++
++      for (int i = 0; i < *count; i++) {
++         modifiers[i] = (i > 0) ? DRM_FORMAT_MOD_LINEAR : mod;
++
++         if (external_only)
++               external_only[i] = 0;
++      }
++   } else {
++      *count = (mod != DRM_FORMAT_MOD_LINEAR) ? 2 : 1;
++   }
++}
++#endif
++
++static void
++virgl_init_screen_format_modifier_async(struct virgl_screen *vscreen)
++{
++   struct virgl_resource *res;
++   struct virgl_context *vctx;
++   struct pipe_context *ctx;
++
++   simple_mtx_init(&vscreen->gbm.lock, mtx_plain);
++
++   if (!(vscreen->caps.caps.v2.capability_bits_v2 & VIRGL_CAP_V2_QUERY_FORMAT_MODIFIER))
++      return;
++
++   res = (struct virgl_resource *)
++      pipe_buffer_create(&vscreen->base, PIPE_BIND_CUSTOM, PIPE_USAGE_STAGING,
++                         sizeof(vscreen->gbm.list));
++
++   if (!res)
++      return;
++
++   ctx = vscreen->base.context_create(&vscreen->base, NULL, 0);
++   vctx = virgl_context(ctx);
++
++   virgl_encoder_query_gbm_format_modifier(vctx, res);
++
++   ctx->flush(ctx, NULL, 0);
++
++   vscreen->gbm.res = res;
++   vscreen->gbm.ctx = ctx;
++}
++
++void virgl_screen_sync_format_modifier(struct virgl_screen *vscreen)
++{
++   simple_mtx_lock(&vscreen->gbm.lock);
++
++   if (!vscreen->gbm.ctx) {
++      simple_mtx_unlock(&vscreen->gbm.lock);
++      return;
++   }
++
++   vscreen->vws->resource_wait(vscreen->vws, vscreen->gbm.res->hw_res);
++
++   pipe_buffer_read(vscreen->gbm.ctx, &vscreen->gbm.res->b,
++                    0, sizeof(vscreen->gbm.list), &vscreen->gbm.list);
++
++   vscreen->gbm.ctx->destroy(vscreen->gbm.ctx);
++   pipe_resource_reference((struct pipe_resource **)&vscreen->gbm.res, NULL);
++
++   if (vscreen->gbm.list.num > ARRAY_SIZE(vscreen->gbm.list.formats)) {
++      mesa_loge("invalid number of host gbm formats\n");
++      vscreen->gbm.list.num = 0;
++   }
++
++   vscreen->gbm.ctx = NULL;
++
++   simple_mtx_unlock(&vscreen->gbm.lock);
++}
++
+ struct pipe_screen *
+ virgl_create_screen(struct virgl_winsys *vws, const struct pipe_screen_config *config)
+ {
+@@ -1031,6 +1128,9 @@ virgl_create_screen(struct virgl_winsys *vws, const struct pipe_screen_config *c
+    screen->base.get_disk_shader_cache = virgl_get_disk_shader_cache;
+    screen->base.is_dmabuf_modifier_supported = virgl_is_dmabuf_modifier_supported;
+    screen->base.get_dmabuf_modifier_planes = virgl_get_dmabuf_modifier_planes;
++#if !defined(_WIN32)
++   screen->base.query_dmabuf_modifiers = virgl_screen_query_dmabuf_modifiers;
++#endif
+ 
+    virgl_init_screen_resource_functions(&screen->base);
+ 
+@@ -1073,6 +1173,7 @@ virgl_create_screen(struct virgl_winsys *vws, const struct pipe_screen_config *c
+ 
+    slab_create_parent(&screen->transfer_pool, sizeof(struct virgl_transfer), 16);
+ 
++   virgl_init_screen_format_modifier_async(screen);
+    virgl_disk_cache_create(screen);
+    return &screen->base;
+ }
+diff --git a/src/gallium/drivers/virgl/virgl_screen.h b/src/gallium/drivers/virgl/virgl_screen.h
+index d29572529c0..7439914fb05 100644
+--- a/src/gallium/drivers/virgl/virgl_screen.h
++++ b/src/gallium/drivers/virgl/virgl_screen.h
+@@ -46,6 +46,13 @@ enum virgl_debug_flags {
+ extern const struct debug_named_value virgl_debug_options[];
+ extern int virgl_debug;
+ 
++struct virgl_screen_gbm_format_modifier {
++   struct virgl_gbm_format_modifier list;
++   struct virgl_resource *res;
++   struct pipe_context *ctx;
++   simple_mtx_t lock;
++};
++
+ struct virgl_screen {
+    struct pipe_screen base;
+ 
+@@ -71,6 +78,8 @@ struct virgl_screen {
+    nir_shader_compiler_options compiler_options;
+ 
+    struct disk_cache *disk_cache;
++
++   struct virgl_screen_gbm_format_modifier gbm;
+ };
+ 
+ 
+@@ -117,4 +126,7 @@ virgl_shader_stage_convert(mesa_shader_stage type)
+  */
+ #define VIRGL_MAP_BUFFER_ALIGNMENT 64
+ 
++void
++virgl_screen_sync_format_modifier(struct virgl_screen *vscreen);
++
+ #endif
+diff --git a/src/virtio/virtio-gpu/virgl_hw.h b/src/virtio/virtio-gpu/virgl_hw.h
+index ec10bdd3447..2b9c5e5c000 100644
+--- a/src/virtio/virtio-gpu/virgl_hw.h
++++ b/src/virtio/virtio-gpu/virgl_hw.h
+@@ -628,6 +628,7 @@ enum virgl_formats {
+ #define VIRGL_CAP_V2_MIRROR_CLAMP_TO_EDGE (1u << 16)
+ #define VIRGL_CAP_V2_MIRROR_CLAMP         (1u << 17)
+ #define VIRGL_CAP_V2_RESOURCE_LAYOUT      (1u << 18)
++#define VIRGL_CAP_V2_QUERY_FORMAT_MODIFIER (1u << 19)
+ 
+ /* virgl bind flags - these are compatible with mesa 10.5 gallium.
+  * but are fixed, no other should be passed to virgl either.
+diff --git a/src/virtio/virtio-gpu/virgl_protocol.h b/src/virtio/virtio-gpu/virgl_protocol.h
+index cb80403564d..c76265c61f4 100644
+--- a/src/virtio/virtio-gpu/virgl_protocol.h
++++ b/src/virtio/virtio-gpu/virgl_protocol.h
+@@ -58,6 +58,16 @@ struct virgl_resource_layout
+     } planes[VIRGL_RESOURCE_MAX_PLANES];
+ };
+ 
++#define VIRGL_MAX_FORMATS_MODIFIERS	128
++struct virgl_gbm_format_modifier
++{
++   uint64_t num;
++   struct {
++      uint64_t modifier;
++      uint64_t virgl_format;
++   } formats[VIRGL_MAX_FORMATS_MODIFIERS];
++};
++
+ enum virgl_object_type {
+    VIRGL_OBJECT_NULL,
+    VIRGL_OBJECT_BLEND,
+@@ -144,6 +154,7 @@ enum virgl_context_cmd {
+ 
+    VIRGL_CCMD_CLEAR_SURFACE,
+    VIRGL_CCMD_GET_PIPE_RESOURCE_LAYOUT,
++   VIRGL_CCMD_QUERY_GBM_FORMAT_MODIFIER,
+ 
+    VIRGL_MAX_COMMANDS
+ };
+@@ -799,4 +810,8 @@ enum vrend_tweak_type {
+ #define VIRGL_RESOURCE_LAYOUT_HANDLE_OUT     1
+ #define VIRGL_RESOURCE_LAYOUT_HANDLE_TARGET  2
+ 
++/* VIRGL_CCMD_QUERY_GBM_FORMAT_MODIFIER */
++#define VIRGL_QUERY_FORMAT_MODIFIER_SIZE     1
++#define VIRGL_QUERY_FORMAT_MODIFIER_HANDLE   1
++
+ #endif
+-- 
+2.34.1
+

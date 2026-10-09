@@ -1,0 +1,91 @@
+From 44d63c2100d6b3eca63e536986955909e990fa24 Mon Sep 17 00:00:00 2001
+From: Ahsan Hussain <ahsan.hussain@siemens.com>
+Date: Tue, 6 Oct 2026 09:42:40 +0500
+Subject: [PATCH 3/3] venus: stop spoofing VK_EXT_physical_device_drm on Nvidia
+ for Wayland
+
+Commit 1a302155ee2 ("venus: force prime blit on Nvidia GPU") hides
+VK_EXT_physical_device_drm on Nvidia so that Wayland wsi always takes the
+prime blit path. The reason is that compositors may offer only LINEAR,
+which Nvidia can't render to, and that wsi could not reject LINEAR once
+the native image path was taken. The previous commit makes common wsi
+check the modifier tiling features and fall back to the buffer blit
+itself in that case.
+
+Report the real VK_EXT_physical_device_drm on Wayland again. Wayland wsi
+then takes the zero-copy native path when the compositor offers a tiled
+Nvidia modifier, e.g. a virgl compositor on a host with tiled Venus
+interop allocation, and keeps the prime blit when it doesn't. The
+same-GPU blit also allocates its LINEAR buffer from device memory
+instead of system memory, as the device now matches the compositor's
+DRM device.
+
+The X11 part of the spoof (the PCI bus info, which X11 wsi uses to match
+the device) and the gamescope exception are unchanged.
+
+Tested with a Venus guest on an NVIDIA 595 host, Weston on virgl:
+ - host with tiled interop: native path with tiled modifiers,
+   vkmark --winsys=wayland 5396 (with the spoof: 1782)
+ - host without it: LINEAR prime blit, 4207 (with the spoof: 2183)
+
+Upstream-Status: Pending
+
+Signed-off-by: Ahsan Hussain <ahsan.hussain@siemens.com>
+---
+ src/virtio/vulkan/vn_wsi.c | 32 +++++++++++---------------------
+ 1 file changed, 11 insertions(+), 21 deletions(-)
+
+diff --git a/src/virtio/vulkan/vn_wsi.c b/src/virtio/vulkan/vn_wsi.c
+index e73ab48c2fe..60c565d320e 100644
+--- a/src/virtio/vulkan/vn_wsi.c
++++ b/src/virtio/vulkan/vn_wsi.c
+@@ -138,18 +138,18 @@ vn_wsi_init(struct vn_physical_device *physical_dev)
+        physical_dev->renderer_driver_version <
+           VN_MAKE_NVIDIA_VERSION(590, 48, 1, 0));
+ 
+-   /* Normally Venus on Nvidia GPUs takes the prime blit path. The exception
+-    * is when KWin or any wlroots based compositors are used:
+-    * 1. KWin and wlroots based compositors always add LINEAR to dmabuf
+-    *    feedback tranches assuming LINEAR can be handled by GPU drivers.
+-    * 2. Venus + Virgl only sees the compositor injected LINEAR mod since
+-    *    Virgl doesn't support explicit modifiers on the driver side.
+-    * 3. Nvidia GPUs doesn't support LINEAR color attachment, and it's too
+-    *    late to reject LINEAR mod when the native image path has already
+-    *    been taken instead of the prime image path.
++   /* Venus on Nvidia GPUs takes the prime blit path on X11, since Nvidia
++    * GPUs don't support LINEAR color attachment.
+     *
+-    * Gamescope requires VK_EXT_physical_device_drm and its runtime doesn't
+-    * use standard WSI extensions, so venus can spoof without impacting it.
++    * On Wayland, common wsi takes the native image path only if one of the
++    * compositor modifiers supports the swapchain usage, and falls back to
++    * the prime blit path otherwise. That covers compositors that only offer
++    * LINEAR (e.g. KWin and wlroots always add it, and Virgl without
++    * explicit modifier support has nothing else), while a compositor that
++    * offers a tiled Nvidia modifier gets zero-copy native images.
++    *
++    * Gamescope is excluded as before since its runtime doesn't use standard
++    * WSI extensions.
+     */
+    struct vk_properties *props = &physical_dev->base.vk.properties;
+    const bool is_nvidia = props->vendorID == 0x10de;
+@@ -162,16 +162,6 @@ vn_wsi_init(struct vn_physical_device *physical_dev)
+       props->pciBus = 0;
+       props->pciDevice = 0;
+       props->pciFunction = 0;
+-
+-      /* Fail same_gpu check on wayland. See wsi_wl_display_init. */
+-      physical_dev->base.vk.supported_extensions.EXT_physical_device_drm =
+-         false;
+-      props->drmHasPrimary = false;
+-      props->drmHasRender = true;
+-      props->drmPrimaryMajor = 0;
+-      props->drmPrimaryMinor = 0;
+-      props->drmRenderMajor = 0;
+-      props->drmRenderMinor = 0;
+    }
+ 
+    const VkAllocationCallbacks *alloc =
+-- 
+2.34.1
+
