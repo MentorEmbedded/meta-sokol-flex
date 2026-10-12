@@ -25,8 +25,6 @@ BINARY_ARTIFACTS_COMPRESSION[doc] = "Compression type for images and downloads a
 ARCHIVE_RELEASE_VERSION ?= "${DISTRO_VERSION}"
 MANIFEST_NAME ?= "${DISTRO}-${ARCHIVE_RELEASE_VERSION}-${MACHINE}"
 EXTRA_MANIFEST_NAME ?= "${DISTRO}-${ARCHIVE_RELEASE_VERSION}"
-SCRIPTS_VERSION ?= "0"
-SCRIPTS_ARTIFACT_NAME ?= "${DISTRO}-scripts-${DISTRO_VERSION}.${SCRIPTS_VERSION}"
 
 # `layers` artifact configuration {{{1
 SUBLAYERS_INDIVIDUAL_ONLY ?= ""
@@ -35,20 +33,11 @@ SUBLAYERS_INDIVIDUAL_ONLY_TOPLEVEL ?= ""
 RELEASE_EXCLUDED_LAYERNAMES ?= "workspacelayer"
 RELEASE_EXCLUDED_LAYERNAMES[doc] = "List of layer names to exclude from archival"
 
-# Files for the script artifact
-FILESEXTRAPATHS:append = ":${@':'.join('%s/../scripts/release:%s/../scripts' % (l, l) for l in '${BBPATH}'.split(':'))}"
-FLEX_SCRIPTS_FILES = "flex-checkout setup-flex setup-workspace setup-ubuntu setup-rocky"
-SRC_URI += "${@' '.join('file://%s' % s for s in d.getVar('FLEX_SCRIPTS_FILES').split())}"
-# }}}1
-
 # `images` artifact configuration {{{1
 # Filesystem paths in the destination for the image artifacts
 BSPFILES_INSTALL_PATH = "${MACHINE}/${ARCHIVE_RELEASE_VERSION}"
 BINARY_INSTALL_PATH ?= "${BSPFILES_INSTALL_PATH}/binary"
 CONF_INSTALL_PATH ?= "${BSPFILES_INSTALL_PATH}/conf"
-
-# In our `images` artifact, include a runqemu wrapper for qemu
-SRC_URI:append:qemuall = " file://runqemu.in"
 
 # Image files to be archived
 IMAGE_BASENAME = "${RELEASE_IMAGE}"
