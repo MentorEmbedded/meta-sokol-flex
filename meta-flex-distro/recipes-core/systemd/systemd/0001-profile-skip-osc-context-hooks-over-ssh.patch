@@ -1,0 +1,18 @@
+From: FLEX Yocto layer
+Subject: [PATCH] systemd: Skip OSC context prompt hooks over SSH
+
+Do not register the OSC 3008 prompt hooks for SSH sessions.
+
+Upstream-Status: Inappropriate [configuration]
+
+--- a/profile.d/80-systemd-osc-context.sh
++++ b/profile.d/80-systemd-osc-context.sh
+@@ -71,7 +71,7 @@
+     printf "\033]3008;start=%.64s%s;type=command;cwd=%.255s\033\\" "$systemd_osc_context_cmd_id" "$(__systemd_osc_context_common)" "$(__systemd_osc_context_escape "$PWD")"
+ }
+ 
+-if [ -n "${BASH_VERSION:-}" ]; then
++if [ -n "${BASH_VERSION:-}" ] && [ -z "${SSH_CONNECTION:-}" ]; then
+     # Legacy bashrc will assign PROMPT_COMMAND=, which is equivalent to assigning
+     # index 0 in the array. Leave an empty spot to handle this gracefully.
+     [ -n "$(declare -p PROMPT_COMMAND 2>/dev/null)" ] || PROMPT_COMMAND+=('')

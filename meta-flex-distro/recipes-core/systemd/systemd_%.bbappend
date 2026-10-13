@@ -5,6 +5,9 @@
 SYSTEMD_LOGLEVEL ?= "info"
 SYSTEMD_LOGLEVEL:innexis-linux ?= "emerg"
 
+FILESEXTRAPATHS:prepend:innexis-linux := "${THISDIR}/${PN}:"
+SRC_URI:append:innexis-linux = " file://0001-profile-skip-osc-context-hooks-over-ssh.patch"
+
 do_compile:append:innexis-linux () {
     printf '[Manager]\n' >loglevel.conf
     printf 'LogLevel=${SYSTEMD_LOGLEVEL}\n' >>loglevel.conf
