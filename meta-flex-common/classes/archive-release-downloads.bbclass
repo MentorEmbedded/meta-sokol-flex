@@ -19,10 +19,6 @@ DL_LICENSE_INCLUDE ?= "${@' '.join(sorted(set(d.getVarFlags('SPDXLICENSEMAP').va
 DL_LICENSE_INCLUDE[type] = 'list'
 DL_LICENSE_INCLUDE[doc] = 'Space separated list of included licenses (supports wildcards)'
 
-DL_LICENSE_EXCLUDE ?= 'CLOSED Proprietary* Siemens Freescale EULA INTEL NetLogic'
-DL_LICENSE_EXCLUDE[type] = 'list'
-DL_LICENSE_EXCLUDE[doc] = 'Space separated list of excluded licenses (supports wildcards)'
-
 python do_archive_release_downloads () {
     """Populate a tree of the recipe sources and emit patch series files"""
     import os.path
@@ -30,7 +26,7 @@ python do_archive_release_downloads () {
     import oe.license
 
     include = oe.data.typed_value('DL_LICENSE_INCLUDE', d)
-    exclude = oe.data.typed_value('DL_LICENSE_EXCLUDE', d)
+    exclude = []
 
     try:
         included, reason = oe.license.is_included(d.getVar('LICENSE', True), include, exclude)
