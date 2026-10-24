@@ -1,0 +1,60 @@
+From ab65a8167b304e56aa1603878136ecff9c340cfb Mon Sep 17 00:00:00 2001
+From: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+Date: Sat, 24 Oct 2026 03:24:57 +0000
+Subject: [PATCH 2/2] venus: only reject legacy-tiled external images for
+ scanout
+
+vn_GetPhysicalDeviceImageFormatProperties2() rejects every external
+image query with a tiling other than DRM_FORMAT_MODIFIER when the
+renderer exports dma-buf, because venus does not support legacy
+tiling for scanout. The check is not limited to scanout, so it also
+rejects queries that only want to share an image between VkDevices
+through OPAQUE_FD or dma-buf, even though the renderer supports them
+and image creation, export and import already work for them.
+
+Apply the check to the queries that can be used for scanout, the
+ones chained with the mesa wsi hint, and forward all others to the
+renderer so that it decides whether the combination is supported.
+Common wsi chains the hint to the external image queries it makes,
+the ones with DRM format modifiers, and its only other query has no
+external memory info, so wsi behavior does not change.
+
+An application that queries the dma-buf export of an optimally tiled
+image without the hint now gets the answer of the renderer. The
+layout of such an image is up to the renderer, so it is only
+meaningful to share it with consumers of the same renderer.
+
+Checked on an aarch64 host with a native NVIDIA 595.58.03 renderer:
+OPAQUE_FD and dma-buf queries with OPTIMAL and LINEAR tiling are
+supported. Through venus, an image exported from one VkDevice shows
+the same data after it is imported into a second VkDevice.
+
+Upstream-Status: Pending
+
+Signed-off-by: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+---
+ src/virtio/vulkan/vn_physical_device.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/src/virtio/vulkan/vn_physical_device.c b/src/virtio/vulkan/vn_physical_device.c
+index 6ac8437..0eebdf4 100644
+--- a/src/virtio/vulkan/vn_physical_device.c
++++ b/src/virtio/vulkan/vn_physical_device.c
+@@ -2730,8 +2730,13 @@ vn_GetPhysicalDeviceImageFormatProperties2(
+          external_info->handleType !=
+          VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID);
+ 
+-      /* venus doesn't support legacy tiling for scanout purpose */
+-      if (renderer_handle_type ==
++      /* venus doesn't support legacy tiling for scanout purpose. Only the
++       * queries that can be used for scanout, i.e. the ones chained with
++       * the mesa wsi hint, are rejected here. For all other external
++       * images, leave it to the renderer to tell whether it can share them.
++       */
++      if (wsi_info &&
++          renderer_handle_type ==
+              VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT &&
+           pImageFormatInfo->tiling !=
+              VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT) {
+-- 
+2.43.0
