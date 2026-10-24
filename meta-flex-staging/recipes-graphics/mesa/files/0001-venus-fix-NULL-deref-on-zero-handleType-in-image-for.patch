@@ -1,0 +1,38 @@
+From c70bf346c6319c939d314d221d3f99cb93ec40de Mon Sep 17 00:00:00 2001
+From: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+Date: Fri, 23 Oct 2026 19:35:18 +0000
+Subject: [PATCH 1/2] venus: fix NULL deref on zero handleType in image format
+ query
+
+vn_GetPhysicalDeviceImageFormatProperties2() resets external_info to
+NULL when the chained VkPhysicalDeviceExternalImageFormatInfo has a
+handleType of 0, which is valid and means no external memory. The AHB
+check right after it still dereferences external_info
+unconditionally, so such a query crashes with a NULL pointer
+dereference.
+
+Only dereference external_info for the AHB check if it is still set.
+
+Upstream-Status: Pending
+
+Signed-off-by: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+---
+ src/virtio/vulkan/vn_physical_device.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/virtio/vulkan/vn_physical_device.c b/src/virtio/vulkan/vn_physical_device.c
+index a566a12..6ac8437 100644
+--- a/src/virtio/vulkan/vn_physical_device.c
++++ b/src/virtio/vulkan/vn_physical_device.c
+@@ -2715,7 +2715,8 @@ vn_GetPhysicalDeviceImageFormatProperties2(
+       }
+ 
+       /* Fully resolve AHB image format query on the driver side. */
+-      if (external_info->handleType ==
++      if (external_info &&
++          external_info->handleType ==
+           VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID) {
+          assert(physical_dev->instance->renderer->info.has_dma_buf_import);
+          return vn_get_ahb_image_props(physical_dev, pImageFormatInfo,
+-- 
+2.43.0
