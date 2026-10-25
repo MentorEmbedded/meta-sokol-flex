@@ -5,7 +5,7 @@ LICENSE = "Apache-2.0"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=175792518e4ac015ab6696d16c4f607e"
 
 SRC_URI = "git://android.googlesource.com/platform/hardware/google/gfxstream;branch=emu-main-dev"
-SRCREV = "abd306f3f35ab9946066084671ed263008531d19"
+SRCREV = "37c767bf740a744e79160b27b31268dd62baf01e"
 SRC_URI += "\
     file://0001-host-remove-hard-dependency-on-x11.patch \
 "
