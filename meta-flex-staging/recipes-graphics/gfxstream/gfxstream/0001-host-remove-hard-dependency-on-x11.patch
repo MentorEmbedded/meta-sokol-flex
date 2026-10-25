@@ -1,18 +1,33 @@
-From a65f748edf19d9d6ecb2c8d5fb8b0abcaab4d0a1 Mon Sep 17 00:00:00 2001
+From 4a60d72512210fb09168461dc2e915d88a431d62 Mon Sep 17 00:00:00 2001
 From: Haseeb Ashraf <haseeb.ashraf@siemens.com>
-Date: Wed, 13 May 2026 13:05:52 +0500
-Subject: [PATCH 1/1] host: remove hard dependency on x11
+Date: Thu, 22 Oct 2026 14:25:16 +0000
+Subject: [PATCH] host: remove hard dependency on X11
+
+Build the host backend without X11 on Linux:
+
+ - include <GL/glx.h> only when the glx meson option is enabled
+   (-DENABLE_GLX), so that -Dglx=disabled builds without X11 headers
+ - use VK_USE_PLATFORM_WAYLAND_KHR instead of VK_USE_PLATFORM_XCB_KHR
+ - replace the X11 sub-window implementation by a no-op one; the
+   embedder does not use native sub-windows
 
 Upstream-Status: Inappropriate [custom implementation]
 
 Signed-off-by: Haseeb Ashraf <haseeb.ashraf@siemens.com>
 ---
- host/gl/glestranslator/GLcommon/GLDispatch.cpp | 2 ++
- host/gl/glestranslator/GLcommon/meson.build    | 4 ++++
- 2 files changed, 6 insertions(+)
+ host/gl/glestranslator/common/gl_dispatch.cpp |  2 ++
+ host/gl/glestranslator/common/meson.build     |  4 +++
+ host/meson.build                              |  2 +-
+ host/native_window/meson.build                |  2 +-
+ .../native_sub_window_wayland.cpp             | 30 +++++++++++++++++++
+ host/vulkan/cereal/meson.build                |  2 +-
+ host/vulkan/emulated_textures/meson.build     |  2 +-
+ host/vulkan/meson.build                       |  2 +-
+ 8 files changed, 41 insertions(+), 5 deletions(-)
+ create mode 100644 host/native_window/native_sub_window_wayland.cpp
 
 diff --git a/host/gl/glestranslator/common/gl_dispatch.cpp b/host/gl/glestranslator/common/gl_dispatch.cpp
-index f2b9f4225..47ca23ab9 100644
+index f2b9f42..47ca23a 100644
 --- a/host/gl/glestranslator/common/gl_dispatch.cpp
 +++ b/host/gl/glestranslator/common/gl_dispatch.cpp
 @@ -22,7 +22,9 @@
@@ -26,7 +41,7 @@ index f2b9f4225..47ca23ab9 100644
  #include <windows.h>
  #endif
 diff --git a/host/gl/glestranslator/common/meson.build b/host/gl/glestranslator/common/meson.build
-index 2f8c060e4..8b713f6d0 100644
+index c838d6e..407dfa6 100644
 --- a/host/gl/glestranslator/common/meson.build
 +++ b/host/gl/glestranslator/common/meson.build
 @@ -1,6 +1,10 @@
@@ -41,19 +56,10 @@ index 2f8c060e4..8b713f6d0 100644
    'rgtc.cpp',
    'framebuffer_data.cpp',
 diff --git a/host/meson.build b/host/meson.build
-index 54b7c49fc..a6d3192cc 100644
+index 1e8875a..9e22f7f 100644
 --- a/host/meson.build
 +++ b/host/meson.build
-@@ -131,7 +131,7 @@ elif host_machine.system() == 'darwin'
- elif host_machine.system() == 'windows'
-   files_lib_gfxstream_backend += files('native_sub_window_win32.cpp')
- elif host_machine.system() == 'linux' and use_gles
--  files_lib_gfxstream_backend += files('native_sub_window_x11.cpp')
-+  files_lib_gfxstream_backend += files('native_sub_window_wayland.cpp')
- elif host_machine.system() == 'qnx'
-   files_lib_gfxstream_backend += files(
-     'platform_helper_qnx.cpp',
-@@ -152,7 +152,7 @@ elif host_machine.system() == 'darwin'
+@@ -140,7 +140,7 @@ elif host_machine.system() == 'darwin'
    gfxstream_backend_cpp_args += '-DVK_USE_PLATFORM_METAL_EXT'
    gfxstream_backend_cpp_args += '-DVK_USE_PLATFORM_MACOS_MVK'
  elif host_machine.system() == 'linux'
@@ -62,13 +68,26 @@ index 54b7c49fc..a6d3192cc 100644
  endif
  
  deps_gfxstream_backend = []
-diff --git a/host/native_sub_window_wayland.cpp b/host/native_sub_window_wayland.cpp
+diff --git a/host/native_window/meson.build b/host/native_window/meson.build
+index fe6a556..b6f8e41 100644
+--- a/host/native_window/meson.build
++++ b/host/native_window/meson.build
+@@ -23,7 +23,7 @@ elif host_machine.system() == 'windows'
+   files_lib_host_native_window += files('native_sub_window_win32.cpp')
+   includes_lib_host_native_window += [inc_opengl_headers]
+ elif host_machine.system() == 'linux' and use_gles
+-  files_lib_host_native_window += files('native_sub_window_x11.cpp')
++  files_lib_host_native_window += files('native_sub_window_wayland.cpp')
+   includes_lib_host_native_window += [inc_opengl_headers]
+ elif host_machine.system() == 'qnx'
+   files_lib_host_native_window += files(
+diff --git a/host/native_window/native_sub_window_wayland.cpp b/host/native_window/native_sub_window_wayland.cpp
 new file mode 100644
-index 000000000..26b42c7b1
+index 0000000..17228b8
 --- /dev/null
-+++ b/host/native_sub_window_wayland.cpp
++++ b/host/native_window/native_sub_window_wayland.cpp
 @@ -0,0 +1,30 @@
-+#include "native_sub_window.h"
++#include "gfxstream/host/native_sub_window.h"
 +
 +EGLNativeWindowType createSubWindow(FBNativeWindowType,
 +                                    int,
@@ -99,10 +118,10 @@ index 000000000..26b42c7b1
 +    return nullptr;
 +}
 diff --git a/host/vulkan/cereal/meson.build b/host/vulkan/cereal/meson.build
-index 2d03c2081..b4bbe9d1c 100644
+index d1c2b82..da73d2a 100644
 --- a/host/vulkan/cereal/meson.build
 +++ b/host/vulkan/cereal/meson.build
-@@ -23,7 +23,7 @@ elif host_machine.system() == 'darwin'
+@@ -24,7 +24,7 @@ elif host_machine.system() == 'darwin'
    cereal_cpp_args += '-DVK_USE_PLATFORM_METAL_EXT'
    cereal_cpp_args += '-DVK_USE_PLATFORM_MACOS_MVK'
  elif host_machine.system() == 'linux'
@@ -112,7 +131,7 @@ index 2d03c2081..b4bbe9d1c 100644
  
  lib_vulkan_cereal = static_library(
 diff --git a/host/vulkan/emulated_textures/meson.build b/host/vulkan/emulated_textures/meson.build
-index 56eed1778..1728c579c 100644
+index 56eed17..1728c57 100644
 --- a/host/vulkan/emulated_textures/meson.build
 +++ b/host/vulkan/emulated_textures/meson.build
 @@ -17,7 +17,7 @@ elif host_machine.system() == 'darwin'
@@ -125,7 +144,7 @@ index 56eed1778..1728c579c 100644
  
  lib_emulated_textures = static_library(
 diff --git a/host/vulkan/meson.build b/host/vulkan/meson.build
-index 499a13bc6..de8fc24ab 100644
+index 602458e..f45e339 100644
 --- a/host/vulkan/meson.build
 +++ b/host/vulkan/meson.build
 @@ -63,7 +63,7 @@ elif host_machine.system() == 'windows'
@@ -137,6 +156,3 @@ index 499a13bc6..de8fc24ab 100644
  endif
  
  lib_vulkan_server = static_library(
--- 
-2.34.1
-
