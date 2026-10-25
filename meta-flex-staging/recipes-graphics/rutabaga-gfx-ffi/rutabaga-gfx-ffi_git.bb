@@ -14,7 +14,7 @@ SRC_URI += "\
     file://rutabaga_gfx_ffi.pc.in \
     file://unstable.patch \
 "
-SRCREV = "e89c714fdb627148beeaa69a0ce745b38d1e3fb5"
+SRCREV = "db76468124945af9c8adf2ea8e88dcf8ca06b47d"
 
 require rutabaga-gfx-ffi-crates.inc
 
@@ -30,23 +30,57 @@ CARGO_SRC_DIR = "ffi"
 
 INHIBIT_PACKAGE_STRIP = "1"
 
-# rutabaga has no Cargo.lock file, so we need to generate one to make the rest of the tooling happy...
-# Note:
-# 1. rutabaga 0.1.76 crate need to be patched to sync with upstream using Cargo.toml [patch.crates-io]
-# 2. However, OE doesn't allow network access except for do_fetch stage. Therefore, this step will fail
-# in any case when any crate dependancies are overriden.
-# 3. Therefore, we workaround by generating cargo.lock file offline via $bitbake -c devshell
+# rutabaga has no Cargo.lock upstream and the cargo class builds with --frozen, so a Cargo.lock
+# has to exist in ${S}. It is generated with network access and kept in the layer as
+# rutabaga-gfx-ffi/Cargo.lock (an empty placeholder is shipped until it is generated):
 #
-do_configure:append() {
-    # Ensure rust features are passed and Cargo.lock gets generated if missing
-    if [ ! -e ${S}/Cargo.lock ]; then
-        cd ${S}
-        ${CARGO} generate-lockfile --offline
+#   bitbake -c generate_lockfile rutabaga-gfx-ffi   # rewrites rutabaga-gfx-ffi/Cargo.lock
+#   bitbake -c update_crates rutabaga-gfx-ffi       # regenerates rutabaga-gfx-ffi-crates.inc
+#   bitbake rutabaga-gfx-ffi
+#
+# Repeat the first two commands whenever SRCREV changes. The normal cargo configuration cannot be
+# used to resolve: it replaces crates.io by an offline directory with only the crates listed in
+# the crates.inc, which is exactly what is being regenerated.
+SRC_URI += "file://Cargo.lock"
+
+python do_patch:append() {
+    import shutil
+    shutil.copy(d.expand('${UNPACKDIR}/Cargo.lock'), d.expand('${S}/Cargo.lock'))
+}
+
+do_configure:prepend() {
+    if [ ! -s ${S}/Cargo.lock ]; then
+        bbfatal "No Cargo.lock: run 'bitbake -c generate_lockfile ${PN}' and then 'bitbake -c update_crates ${PN}'"
     fi
 }
 
+# Manual task, never part of a normal build. Uses the cargo of the build system, so the lock file
+# format is guaranteed to be readable by the cargo that later builds the recipe.
+do_generate_lockfile[depends] += "ca-certificates-native:do_populate_sysroot"
+do_generate_lockfile[nostamp] = "1"
+do_generate_lockfile[network] = "1"
+do_generate_lockfile() {
+    cd ${S}
+    rm -f Cargo.lock
+
+    # Own cargo home: no source replacement, resolve against the real crates.io index.
+    export CARGO_HOME="${WORKDIR}/cargo_home_lockgen"
+    rm -rf "${CARGO_HOME}"
+    export CARGO_HTTP_CAINFO="${STAGING_ETCDIR_NATIVE}/ssl/certs/ca-certificates.crt"
+    # Prefer crate versions that the rustc of this build system can compile (needs cargo >= 1.84,
+    # ignored by older versions).
+    export CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS="fallback"
+
+    ${CARGO} generate-lockfile
+
+    install -d ${THISDIR}/${BPN}
+    install -m 0644 Cargo.lock ${THISDIR}/${BPN}/Cargo.lock
+    bbnote "Wrote ${THISDIR}/${BPN}/Cargo.lock - now run: bitbake -c update_crates ${PN}"
+}
+addtask generate_lockfile after do_prepare_recipe_sysroot do_patch
+
 LIB_NAME = "librutabaga_gfx_ffi.so"
-RUTABAGA_VERSION = "0.1.76"
+RUTABAGA_VERSION = "0.1.85"
 RUTABAGA_VERSION_MAJOR = "0"
 
 do_install() {
