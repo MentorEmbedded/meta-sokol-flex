@@ -1,0 +1,57 @@
+From cdb78ddb70447b8eb57d4f892f26b42e41ef6020 Mon Sep 17 00:00:00 2001
+From: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+Date: Mon, 26 Oct 2026 09:43:33 +0000
+Subject: [PATCH 2/2] vulkan/device-select: print deviceUUID in the device list
+
+MESA_VK_DEVICE_SELECT=list is how users discover what they can
+select. Now that a device can be selected by deviceUUID, print the
+UUID there as well, so it can be copied straight from the list
+instead of from a separate vulkaninfo run.
+
+The UUID is appended after the PCI address and only printed when
+vkGetPhysicalDeviceProperties2 is available, i.e. for Vulkan 1.1+
+instances. The existing fields are unchanged.
+
+Upstream-Status: Pending
+Signed-off-by: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+---
+ src/vulkan/device-select-layer/device_select_layer.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/src/vulkan/device-select-layer/device_select_layer.c b/src/vulkan/device-select-layer/device_select_layer.c
+index d3c16b5..7417bba 100644
+--- a/src/vulkan/device-select-layer/device_select_layer.c
++++ b/src/vulkan/device-select-layer/device_select_layer.c
+@@ -245,11 +245,18 @@ print_gpu(const struct instance_info *info, unsigned index, VkPhysicalDevice dev
+       (VkPhysicalDevicePCIBusInfoPropertiesEXT){
+          .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PCI_BUS_INFO_PROPERTIES_EXT,
+       };
++   VkPhysicalDeviceIDProperties id_properties = (VkPhysicalDeviceIDProperties){
++      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES,
++   };
+    VkPhysicalDeviceProperties2 properties = (VkPhysicalDeviceProperties2){
+       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+    };
+    if (info->has_vulkan11 && info->has_pci_bus)
+       properties.pNext = &ext_pci_properties;
++   if (info->GetPhysicalDeviceProperties2) {
++      id_properties.pNext = properties.pNext;
++      properties.pNext = &id_properties;
++   }
+    device_select_get_properties(info, device, &properties);
+ 
+    switch (properties.properties.deviceType) {
+@@ -275,6 +282,11 @@ print_gpu(const struct instance_info *info, unsigned index, VkPhysicalDevice dev
+    if (info->has_vulkan11 && info->has_pci_bus)
+       fprintf(stderr, " %04x:%02x:%02x.%x", ext_pci_properties.pciDomain, ext_pci_properties.pciBus,
+               ext_pci_properties.pciDevice, ext_pci_properties.pciFunction);
++   if (info->GetPhysicalDeviceProperties2) {
++      char uuid[DEVICE_SELECT_UUID_STR_SIZE];
++      device_select_format_uuid(id_properties.deviceUUID, uuid);
++      fprintf(stderr, " %s", uuid);
++   }
+    fprintf(stderr, "\n");
+ }
+ 
+-- 
+2.43.0
