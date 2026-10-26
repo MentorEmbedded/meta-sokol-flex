@@ -1,0 +1,301 @@
+From c2319776c94662fe683ec1659c07ea8b5a801752 Mon Sep 17 00:00:00 2001
+From: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+Date: Mon, 26 Oct 2026 09:43:33 +0000
+Subject: [PATCH 1/2] vulkan/device-select: select device by deviceUUID
+
+MESA_VK_DEVICE_SELECT can only pick a device by "vid:did" or by
+device type. Neither identifies a single device when several of
+them report the same IDs. With Venus in a guest, the host GPU, a
+Venus-wrapped llvmpipe and a native llvmpipe can all be present,
+and the last two both report 10005:0, so "10005:0" cannot tell
+them apart and the device type picks whichever comes first.
+
+The DRI_PRIME=pci-... tag does not help either: it needs a Vulkan
+1.1 instance to get the PCI bus info, and Venus devices can share
+the same PCI address (0000:00:00.0 for two of the three here).
+Selecting by enumeration index is not stable, since the order
+changes with the layer's own reordering.
+
+Accept the deviceUUID in its canonical 8-4-4-4-12 form. The spec
+requires it to be unique per device, and the form cannot clash
+with the other accepted values, so no prefix is needed. Only
+deviceUUID is matched: driverUUID is shared by all devices of one
+driver. A trailing '!' exposes only the selected device, as with
+"vid:did!".
+
+The UUID is queried through vkGetPhysicalDeviceProperties2. Apps
+that create a Vulkan 1.0 instance (e.g. vkcube) would not get it,
+so when a UUID is selected, fetch the entry point (or its KHR
+variant) for those instances too. Behaviour is unchanged when no
+UUID is selected. If the UUID cannot be queried or matches no
+device, print a message and ignore the selection instead of
+silently picking another device.
+
+Upstream-Status: Pending
+Signed-off-by: Haseeb Ashraf <haseeb.ashraf@siemens.com>
+---
+ docs/envvars.rst                              |  12 +-
+ .../device-select-layer/device_select.c       | 107 ++++++++++++++++++
+ .../device-select-layer/device_select.h       |  14 +++
+ .../device-select-layer/device_select_layer.c |  16 ++-
+ 4 files changed, 146 insertions(+), 3 deletions(-)
+
+diff --git a/docs/envvars.rst b/docs/envvars.rst
+index 42f4541..9021f36 100644
+--- a/docs/envvars.rst
++++ b/docs/envvars.rst
+@@ -1076,7 +1076,17 @@ Vulkan mesa device select layer environment variables
+    when set to "vid:did" number from PCI device. That PCI device is
+    selected as default. The default device is returned as the first
+    device in vkEnumeratePhysicalDevices API.
+-   Using "vid:did!" will have the same effect as using the
++   When set to a ``deviceUUID`` in the form
++   "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" (as printed by "list" and by
++   ``vulkaninfo``), the device with that UUID is selected as default.
++   Unlike "vid:did" this identifies exactly one device, even when several
++   devices share the same vendor and device id. Only ``deviceUUID`` is
++   matched, not ``driverUUID``, which is shared by all devices of a driver.
++   Apps that create a Vulkan 1.0 instance need the loader to answer
++   vkGetPhysicalDeviceProperties2 for this to work; if the UUID cannot be
++   queried or matches no device, a message is printed and the selection is
++   ignored.
++   Using "vid:did!" or "<deviceUUID>!" will have the same effect as using the
+    ``MESA_VK_DEVICE_SELECT_FORCE_DEFAULT_DEVICE`` variable.
+ 
+ .. envvar:: MESA_VK_DEVICE_SELECT_FORCE_DEFAULT_DEVICE
+diff --git a/src/vulkan/device-select-layer/device_select.c b/src/vulkan/device-select-layer/device_select.c
+index f52df3e..0435d0c 100644
+--- a/src/vulkan/device-select-layer/device_select.c
++++ b/src/vulkan/device-select-layer/device_select.c
+@@ -38,6 +38,60 @@
+ #include "util/macros.h"
+ #include "device_select.h"
+ 
++static int
++hex_digit(char c)
++{
++   if (c >= '0' && c <= '9')
++      return c - '0';
++   if (c >= 'a' && c <= 'f')
++      return c - 'a' + 10;
++   if (c >= 'A' && c <= 'F')
++      return c - 'A' + 10;
++   return -1;
++}
++
++/* Parse a UUID in the canonical 8-4-4-4-12 form, optionally followed by a
++ * trailing '!'.  This form cannot be confused with any other accepted value
++ * of MESA_VK_DEVICE_SELECT ("vid:did", a device type name or "list"), so no
++ * prefix is needed.
++ */
++bool
++device_select_parse_uuid(const char *str, uint8_t uuid[VK_UUID_SIZE])
++{
++   size_t len = strlen(str);
++   if (len > 0 && str[len - 1] == '!')
++      len--;
++   if (len != DEVICE_SELECT_UUID_STR_SIZE - 1)
++      return false;
++
++   unsigned nibbles = 0;
++   for (size_t i = 0; i < len; i++) {
++      if (i == 8 || i == 13 || i == 18 || i == 23) {
++         if (str[i] != '-')
++            return false;
++         continue;
++      }
++      int v = hex_digit(str[i]);
++      if (v < 0)
++         return false;
++      if (nibbles % 2 == 0)
++         uuid[nibbles / 2] = v << 4;
++      else
++         uuid[nibbles / 2] |= v;
++      nibbles++;
++   }
++   return nibbles == 2 * VK_UUID_SIZE;
++}
++
++void
++device_select_format_uuid(const uint8_t uuid[VK_UUID_SIZE], char str[DEVICE_SELECT_UUID_STR_SIZE])
++{
++   snprintf(str, DEVICE_SELECT_UUID_STR_SIZE,
++            "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x", uuid[0],
++            uuid[1], uuid[2], uuid[3], uuid[4], uuid[5], uuid[6], uuid[7], uuid[8], uuid[9],
++            uuid[10], uuid[11], uuid[12], uuid[13], uuid[14], uuid[15]);
++}
++
+ static bool
+ fill_drm_device_info(const struct instance_info *info, struct device_pci_info *drm_device,
+                      VkPhysicalDevice device)
+@@ -46,11 +100,21 @@ fill_drm_device_info(const struct instance_info *info, struct device_pci_info *d
+       (VkPhysicalDevicePCIBusInfoPropertiesEXT){
+          .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PCI_BUS_INFO_PROPERTIES_EXT};
+ 
++   VkPhysicalDeviceIDProperties id_properties =
++      (VkPhysicalDeviceIDProperties){.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES};
++
+    VkPhysicalDeviceProperties2 properties =
+       (VkPhysicalDeviceProperties2){.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+ 
+    if (info->has_vulkan11 && info->has_pci_bus)
+       properties.pNext = &ext_pci_properties;
++
++   /* deviceUUID is only needed when it was asked for */
++   bool query_uuid = info->has_selection_uuid && info->GetPhysicalDeviceProperties2;
++   if (query_uuid) {
++      id_properties.pNext = properties.pNext;
++      properties.pNext = &id_properties;
++   }
+    device_select_get_properties(info, device, &properties);
+ 
+    drm_device->device_type = properties.properties.deviceType;
+@@ -63,6 +127,12 @@ fill_drm_device_info(const struct instance_info *info, struct device_pci_info *d
+       drm_device->bus_info.dev = ext_pci_properties.pciDevice;
+       drm_device->bus_info.func = ext_pci_properties.pciFunction;
+    }
++   if (query_uuid) {
++      static const uint8_t zero_uuid[VK_UUID_SIZE];
++      memcpy(drm_device->device_uuid, id_properties.deviceUUID, VK_UUID_SIZE);
++      /* An all-zero UUID means the query was not actually answered. */
++      drm_device->has_device_uuid = memcmp(zero_uuid, id_properties.deviceUUID, VK_UUID_SIZE) != 0;
++   }
+    return drm_device->device_type == VK_PHYSICAL_DEVICE_TYPE_CPU;
+ }
+ 
+@@ -84,6 +154,31 @@ device_select_find_explicit_default(struct device_pci_info *pci_infos, uint32_t
+    return default_idx;
+ }
+ 
++static int
++device_select_find_uuid_default(const struct instance_info *info,
++                                struct device_pci_info *pci_infos, uint32_t device_count)
++{
++   bool uuid_known = false;
++
++   for (unsigned i = 0; i < device_count; ++i) {
++      uuid_known |= pci_infos[i].has_device_uuid;
++      if (pci_infos[i].has_device_uuid &&
++          memcmp(pci_infos[i].device_uuid, info->selection_uuid, VK_UUID_SIZE) == 0)
++         return i;
++   }
++
++   /* The user asked for a specific device, so don't silently pick another one. */
++   if (!uuid_known)
++      fprintf(stderr,
++              "device-select: cannot query deviceUUID (vkGetPhysicalDeviceProperties2 is not "
++              "available to this instance), ignoring MESA_VK_DEVICE_SELECT=%s\n",
++              info->selection);
++   else
++      fprintf(stderr, "device-select: no device has deviceUUID %s, ignoring MESA_VK_DEVICE_SELECT\n",
++              info->selection);
++   return -1;
++}
++
+ static int
+ device_select_find_typed_default(struct device_pci_info *pci_infos, uint32_t device_count,
+                                  const char *selection)
+@@ -280,6 +375,18 @@ get_selected(const struct instance_info *info, uint32_t count, struct device_pci
+       return default_idx;
+    }
+ 
++   if (info->has_selection_uuid)
++      default_idx = device_select_find_uuid_default(info, pci_infos, count);
++   if (default_idx != -1) {
++      if (info->debug)
++         fprintf(stderr,
++                 "device-select: device_select_find_uuid_default for MESA_VK_DEVICE_SELECT "
++                 "selected %i\n",
++                 default_idx);
++      *expose_only_one_dev = ends_with_exclamation_mark(info->selection);
++      return default_idx;
++   }
++
+    if (info->selection)
+       default_idx = device_select_find_explicit_default(pci_infos, count, info->selection);
+    if (default_idx != -1) {
+diff --git a/src/vulkan/device-select-layer/device_select.h b/src/vulkan/device-select-layer/device_select.h
+index 1a71ee4..65ea881 100644
+--- a/src/vulkan/device-select-layer/device_select.h
++++ b/src/vulkan/device-select-layer/device_select.h
+@@ -48,8 +48,15 @@ struct instance_info {
+    char *selection;
+    char *dri_prime;
+    bool force_default_device;
++
++   /* MESA_VK_DEVICE_SELECT given as a deviceUUID (see device_select_parse_uuid()) */
++   bool has_selection_uuid;
++   uint8_t selection_uuid[VK_UUID_SIZE];
+ };
+ 
++/* "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" plus the terminating NUL */
++#define DEVICE_SELECT_UUID_STR_SIZE (2 * VK_UUID_SIZE + 5)
++
+ /* We don't use `drmPciDeviceInfo` because it uses 16-bit ids,
+  * instead of Vulkan's 32-bit ones. */
+ struct device_info {
+@@ -61,6 +68,8 @@ struct device_pci_info {
+    struct device_info dev_info;
+    drmPciBusInfo bus_info;
+    bool has_bus_info;
++   uint8_t device_uuid[VK_UUID_SIZE];
++   bool has_device_uuid;
+    VkPhysicalDeviceType device_type;
+ };
+ 
+@@ -84,6 +93,11 @@ device_select_find_wayland_pci_default(struct device_pci_info *devices, uint32_t
+ }
+ #endif
+ 
++bool device_select_parse_uuid(const char *str, uint8_t uuid[VK_UUID_SIZE]);
++
++void device_select_format_uuid(const uint8_t uuid[VK_UUID_SIZE],
++                               char str[DEVICE_SELECT_UUID_STR_SIZE]);
++
+ void device_select_get_properties(const struct instance_info *info, VkPhysicalDevice device,
+                                   VkPhysicalDeviceProperties2 *properties);
+ 
+diff --git a/src/vulkan/device-select-layer/device_select_layer.c b/src/vulkan/device-select-layer/device_select_layer.c
+index c7a1fe2..d3c16b5 100644
+--- a/src/vulkan/device-select-layer/device_select_layer.c
++++ b/src/vulkan/device-select-layer/device_select_layer.c
+@@ -183,6 +183,8 @@ device_select_CreateInstance(const VkInstanceCreateInfo *pCreateInfo,
+    info->debug = debug_get_bool_option("MESA_VK_DEVICE_SELECT_DEBUG", false) ||
+                  debug_get_bool_option("DRI_PRIME_DEBUG", false);
+    info->selection = os_get_option_dup("MESA_VK_DEVICE_SELECT");
++   if (info->selection)
++      info->has_selection_uuid = device_select_parse_uuid(info->selection, info->selection_uuid);
+    info->dri_prime = os_get_option_dup("DRI_PRIME");
+    info->force_default_device =
+       debug_get_bool_option("MESA_VK_DEVICE_SELECT_FORCE_DEFAULT_DEVICE", false);
+@@ -194,8 +196,18 @@ device_select_CreateInstance(const VkInstanceCreateInfo *pCreateInfo,
+    DEVSEL_GET_CB(EnumeratePhysicalDeviceGroups);
+    DEVSEL_GET_CB(GetPhysicalDeviceProperties);
+    DEVSEL_GET_CB(EnumerateDeviceExtensionProperties);
+-   if (info->has_vulkan11)
++   if (info->has_vulkan11) {
+       DEVSEL_GET_CB(GetPhysicalDeviceProperties2);
++   } else if (info->has_selection_uuid) {
++      /* deviceUUID is only reported through vkGetPhysicalDeviceProperties2.  Only
++       * fetch it for apps that created a Vulkan 1.0 instance when a deviceUUID
++       * was explicitly requested; otherwise the behaviour is unchanged.
++       */
++      DEVSEL_GET_CB(GetPhysicalDeviceProperties2);
++      if (!info->GetPhysicalDeviceProperties2)
++         info->GetPhysicalDeviceProperties2 = (PFN_vkGetPhysicalDeviceProperties2)
++            info->GetInstanceProcAddr(*pInstance, "vkGetPhysicalDeviceProperties2KHR");
++   }
+ #undef DEVSEL_GET_CB
+ 
+    device_select_layer_add_instance(*pInstance, info);
+@@ -219,7 +231,7 @@ void
+ device_select_get_properties(const struct instance_info *info, VkPhysicalDevice device,
+                              VkPhysicalDeviceProperties2 *properties)
+ {
+-   if (info->GetPhysicalDeviceProperties2 && info->has_vulkan11)
++   if (info->GetPhysicalDeviceProperties2)
+       info->GetPhysicalDeviceProperties2(device, properties);
+    else
+       info->GetPhysicalDeviceProperties(device, &properties->properties);
+-- 
+2.43.0
