@@ -4,6 +4,7 @@ SRCREV ?= "63d0e8cc842975e786455f8a2e6502e85685f258"
 XEN_BRANCH ?= "master"
 
 SRC_URI = " \
+    file://production.cfg \
     git://xenbits.xen.org/xen.git;branch=${XEN_BRANCH} \
     file://0001-menuconfig-mconf-cfg-Allow-specification-of-ncurses-location.patch \
     "
